@@ -1,0 +1,11 @@
+format: jb-book
+root: index
+chapters:
+  - file: notebooks/01_data_collection
+    title: "Data Collection"
+  - file: notebooks/02_etf_screening
+    title: "ETF Screening"
+  - file: notebooks/03_portfolio_construction
+    title: "Portfolio Construction"
+  - file: notebooks/04_performance_tracking
+    title: "Performance Tracking"

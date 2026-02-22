@@ -1,0 +1,40 @@
+[project]
+name = "etf-isa-portfolio"
+version = "0.1.0"
+description = "A systematic DIY ETF ISA portfolio targeting 10% real annualised returns"
+requires-python = ">=3.10"
+dependencies = [
+    "jupyter-book>=1.0.0",
+    "matplotlib>=3.5.0",
+    "numpy>=1.21.0",
+    "pandas>=2.0.0",
+    "plotly>=5.0.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.0.0",
+    "scipy>=1.10.0",
+    "yfinance>=0.2.0",
+    "justetf-scraping @ git+https://github.com/nairraks/justetf-scraping.git",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.0.0",
+    "ruff>=0.1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff.lint]
+extend-select = ["I"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ANN", "D1"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["etf_utils"]

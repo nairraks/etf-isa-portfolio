@@ -1,0 +1,26 @@
+# Secrets — never commit
+.env
+
+# Jupyter Book build outputs
+_build/
+.jupyter_cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+*.egg-info/
+
+# Data that can be regenerated (raw scrape outputs are kept for reproducibility)
+# Output files are also kept so book can build without re-running pipeline
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
