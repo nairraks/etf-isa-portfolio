@@ -1,0 +1,126 @@
+[
+    {
+        "region_category":"Developed_APAC",
+        "intra_region_category":"Beta",
+        "etfs":[
+            {
+                "ticker":"JPSRT",
+                "name":"UBS ETF (LU) MSCI Japan Socially Responsible UCITS ETF (hedged to CHF) A-dis"
+            }
+        ]
+    },
+    {
+        "region_category":"Developed_APAC",
+        "intra_region_category":"High Yield",
+        "etfs":[
+            {
+                "ticker":"LAUU",
+                "name":"Amundi Australia S&P\/ASX 200 UCITS ETF Dist"
+            }
+        ]
+    },
+    {
+        "region_category":"Developed_AmericasandUK",
+        "intra_region_category":"Beta",
+        "etfs":[
+            {
+                "ticker":"XSCS",
+                "name":"Xtrackers MSCI USA Consumer Staples UCITS ETF 1D"
+            },
+            {
+                "ticker":"TI5G",
+                "name":"iShares USD TIPS 0-5 UCITS ETF GBP Hedged (Dist)"
+            }
+        ]
+    },
+    {
+        "region_category":"Developed_AmericasandUK",
+        "intra_region_category":"High Yield",
+        "etfs":[
+            {
+                "ticker":"CAHGBD",
+                "name":"UBS ETF (LU) MSCI Canada UCITS ETF (hedged to GBP) A-dis"
+            },
+            {
+                "ticker":"UC82",
+                "name":"UBS ETF (LU) Bloomberg US Liquid Corporates 1-5 Year UCITS ETF (hedged to GBP) A-dis"
+            }
+        ]
+    },
+    {
+        "region_category":"Developed_EMEA",
+        "intra_region_category":"Beta",
+        "etfs":[
+            {
+                "ticker":"XESD",
+                "name":"Xtrackers Spanish Equity UCITS ETF 1D"
+            },
+            {
+                "ticker":"SUKC",
+                "name":"SPDR Bloomberg 0-5 Year Sterling Corporate Bond UCITS ETF"
+            }
+        ]
+    },
+    {
+        "region_category":"Developed_EMEA",
+        "intra_region_category":"High Yield",
+        "etfs":[
+            {
+                "ticker":"LEVMIB",
+                "name":"Amundi FTSE MIB Daily (2x) Leveraged UCITS ETF Dist"
+            },
+            {
+                "ticker":"ERNS",
+                "name":"iShares GBP Ultrashort Bond UCITS ETF"
+            }
+        ]
+    },
+    {
+        "region_category":"Emerging_APACandEMEA",
+        "intra_region_category":"Beta",
+        "etfs":[
+            {
+                "ticker":"FXC",
+                "name":"iShares China Large Cap UCITS ETF"
+            },
+            {
+                "ticker":"HCGG",
+                "name":"HSBC China Government Local Bond UCITS ETF S GBP Hedged"
+            }
+        ]
+    },
+    {
+        "region_category":"Emerging_APACandEMEA",
+        "intra_region_category":"High Yield",
+        "etfs":[
+            {
+                "ticker":"HIDR",
+                "name":"HSBC MSCI Indonesia UCITS ETF USD"
+            },
+            {
+                "ticker":"TIGG",
+                "name":"L&G India INR Government Bond UCITS ETF USD Dist"
+            }
+        ]
+    },
+    {
+        "region_category":"Emerging_Americas",
+        "intra_region_category":"Beta",
+        "etfs":[
+            {
+                "ticker":"IBZL",
+                "name":"iShares MSCI Brazil UCITS ETF (Dist)"
+            }
+        ]
+    },
+    {
+        "region_category":"Emerging_Americas",
+        "intra_region_category":"High Yield",
+        "etfs":[
+            {
+                "ticker":"IBZL",
+                "name":"iShares MSCI Brazil UCITS ETF (Dist)"
+            }
+        ]
+    }
+]

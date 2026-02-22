@@ -1,0 +1,34 @@
+title: DIY ETF ISA Portfolio Guide
+author: nairraks
+copyright: "2025"
+logo: ""
+exclude_patterns: [README.md, archive/]
+
+# Off during refactoring — switch to "cache" once pipeline is stable
+execute:
+  execute_notebooks: "off"
+  timeout: 300
+
+# Information about where the book exists on the web
+repository:
+  url: https://github.com/nairraks/etf-isa-portfolio
+  branch: main
+
+html:
+  baseurl: /etf-isa-portfolio
+  use_repository_button: true
+  use_issues_button: true
+  use_edit_page_button: true
+
+parse:
+  myst_enable_extensions:
+    - colon_fence
+    - dollarmath
+    - linkify
+    - substitution
+    - tasklist
+
+sphinx:
+  config:
+    html_theme_options:
+      navigation_with_keys: true

@@ -1,0 +1,52 @@
+[
+    {
+        "region_category":"APAC",
+        "intra_region_category":"Beta",
+        "etfs":[
+            {
+                "ticker":"LAUU",
+                "name":"Amundi Australia S&P\/ASX 200 UCITS ETF Dist"
+            },
+            {
+                "ticker":"HIDR",
+                "name":"HSBC MSCI Indonesia UCITS ETF USD"
+            },
+            {
+                "ticker":"TIGG",
+                "name":"L&G India INR Government Bond UCITS ETF USD Dist"
+            }
+        ]
+    },
+    {
+        "region_category":"Americas",
+        "intra_region_category":"Beta",
+        "etfs":[
+            {
+                "ticker":"CAHGBD",
+                "name":"UBS ETF (LU) MSCI Canada UCITS ETF (hedged to GBP) A-dis"
+            },
+            {
+                "ticker":"IBZL",
+                "name":"iShares MSCI Brazil UCITS ETF (Dist)"
+            },
+            {
+                "ticker":"UC82",
+                "name":"UBS ETF (LU) Bloomberg US Liquid Corporates 1-5 Year UCITS ETF (hedged to GBP) A-dis"
+            }
+        ]
+    },
+    {
+        "region_category":"EMEA",
+        "intra_region_category":"Beta",
+        "etfs":[
+            {
+                "ticker":"LEVMIB",
+                "name":"Amundi FTSE MIB Daily (2x) Leveraged UCITS ETF Dist"
+            },
+            {
+                "ticker":"ERNS",
+                "name":"iShares GBP Ultrashort Bond UCITS ETF"
+            }
+        ]
+    }
+]
