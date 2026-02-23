@@ -62,7 +62,7 @@ class TestETFAnalysis(unittest.TestCase):
         mock_get.return_value = mock_response
 
         # Import the actual function
-        from curation import check_etf_availability
+        from etf_utils.platform_check import check_etf_availability
 
         # Test availability check
         result = check_etf_availability('ETF1')
