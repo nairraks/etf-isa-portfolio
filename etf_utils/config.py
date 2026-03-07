@@ -14,6 +14,7 @@ DATA_RAW = PROJECT_ROOT / "data" / "raw"
 DATA_INTERMEDIATE = PROJECT_ROOT / "data" / "intermediate"
 DATA_OUTPUT = PROJECT_ROOT / "data" / "output"
 DATA_CONFIG = PROJECT_ROOT / "data" / "config"
+DB_PATH = PROJECT_ROOT / "data" / "etf_portfolio.db"
 
 DATA_PROVIDER = os.getenv("DATA_PROVIDER", "yfinance")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
