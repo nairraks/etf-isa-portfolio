@@ -2,7 +2,7 @@
 name = "etf-isa-portfolio"
 version = "0.1.0"
 description = "A systematic DIY ETF ISA portfolio targeting 10% real annualised returns"
-requires-python = ">=3.10"
+requires-python = ">=3.13"
 dependencies = [
     "jupyter-book>=1.0.0",
     "matplotlib>=3.5.0",
@@ -31,6 +31,9 @@ extend-select = ["I"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ANN", "D1"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [build-system]
 requires = ["hatchling"]
