@@ -4,77 +4,116 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Jupyter Book that documents a systematic DIY ETF portfolio targeting 10% real annualised returns. The book scrapes ETF data from JustETF, screens and ranks ETFs by risk-adjusted metrics, constructs a weighted portfolio, and tracks performance. ETFs focus on distributing (income-generating) UCITS ETFs available on InvestEngine (UK platform).
+A Jupyter Book documenting a systematic DIY ETF portfolio targeting 10% real annualised returns. Scrapes ETF data from JustETF, screens and ranks by risk-adjusted metrics, constructs a weighted portfolio, and tracks performance. ETFs focus on distributing (income-generating) UCITS ETFs available on InvestEngine (UK platform).
 
 ## Commands
 
-### Install dependencies
 ```bash
-pip install -r requirements.txt
+# Install dependencies (uses uv, not pip)
+uv sync
+
+# Run tests (50 tests across 6 files)
+uv run pytest tests/ -v
+
+# Build the Jupyter Book
+uv run jupyter-book build .
+
+# Quick import check
+uv run python -c "from etf_utils.data_provider import DataProvider; print('OK')"
 ```
 
-The `justetf-scraping` dependency is installed directly from GitHub. The repo-level `.venv` is at `../.venv` (parent directory).
+Book output goes to `_build/html/`. Execution is currently `off` (set to `cache` once pipeline is stable).
 
-### Build the Jupyter Book
-```bash
-# Windows
-build.bat
+## Directory Structure
 
-# Cross-platform
-python -m jupyter_book build .
+```
+etf-isa-portfolio/
+├── _config.yml / _toc.yml      # Jupyter Book config (must be at root)
+├── pyproject.toml               # uv project config
+├── index.md                     # Book landing page
+├── .env / .env.example          # Data provider config
+│
+├── notebooks/                   # Chapter notebooks (executed in order)
+│   ├── 01_data_collection.ipynb
+│   ├── 02_etf_screening.ipynb
+│   ├── 03_portfolio_construction.ipynb
+│   └── 04_performance_tracking.ipynb
+│
+├── data/
+│   ├── raw/                     # JustETF scrape outputs (justetf_class-*.csv)
+│   ├── intermediate/            # summary_*.csv, benchmark_*.csv
+│   ├── output/                  # final_portfolio.csv
+│   └── config/                  # etf.json, etf_tickers.json
+│
+├── etf_utils/                   # Shared Python package
+│   ├── config.py                # .env loading, path constants
+│   ├── data_provider.py         # yfinance/AlphaVantage abstraction
+│   ├── data_io.py               # CSV read/write helpers
+│   ├── metrics.py               # Sharpe ratio, volatility, returns, PnL
+│   └── platform_check.py        # InvestEngine availability check
+│
+├── tests/                       # pytest test suite
+│   ├── conftest.py              # Shared fixtures
+│   ├── test_config.py
+│   ├── test_data_io.py
+│   ├── test_data_provider.py
+│   ├── test_metrics.py
+│   ├── test_platform_check.py
+│   └── test_etf_analysis.py     # Legacy integration tests
+│
+├── archive/                     # Legacy notebooks (not in book)
+│   ├── curation.ipynb
+│   └── extras_dont_check_in_code.ipynb
+│
+└── .github/workflows/
+    └── deploy-book.yml          # Build & deploy to GitHub Pages
 ```
 
-The book output goes to `_build/html/`. Notebooks are auto-executed on each build (`execute_notebooks: auto`, timeout 300s).
+## Pipeline Flow
 
-### Run tests
-```bash
-python -m pytest test_etf_analysis.py
-# or
-python -m unittest test_etf_analysis.py
+```
+01_data_collection → data/raw/*.csv → 02_etf_screening → data/intermediate/summary_all.csv
+→ 03_portfolio_construction → data/output/final_portfolio.csv → 04_performance_tracking
 ```
 
-## Architecture
+## etf_utils Module Index
 
-### Pipeline (Jupyter Book chapters in order)
+| Module | Key exports |
+|--------|------------|
+| `config.py` | `DATA_RAW`, `DATA_INTERMEDIATE`, `DATA_OUTPUT`, `DATA_CONFIG`, `PROJECT_ROOT`, `DATA_PROVIDER` |
+| `data_provider.py` | `DataProvider` — unified class: `get_historical_prices()`, `get_fx_rate()`, `get_latest_price()`, `get_benchmark_period_return()` |
+| `data_io.py` | `load_raw_etf_data()`, `save_intermediate()`, `load_intermediate()`, `save_output()`, `load_output()`, `load_config()`, filename parsers |
+| `metrics.py` | `calculate_annualized_volatility()`, `calculate_sharpe_ratio()`, `interpolate_adjustment_factor()`, `calculate_period_metrics()`, `calculate_daily_pnl()` |
+| `platform_check.py` | `check_etf_availability()` — queries InvestEngine API |
 
-| Notebook | Purpose |
-|---|---|
-| `01_data_collection.ipynb` | Defines investment universe (GDP + MSCI classification), scrapes JustETF for equity/bond ETFs by region, checks InvestEngine availability |
-| `02_etf_screening.ipynb` | Filters distributing ETFs, verifies platform availability, ranks by TER and risk-adjusted returns (1/3/5-year Sharpe ratios) |
-| `03_portfolio_construction.ipynb` | Allocates 90% equities / 10% bonds, applies Sharpe-ratio-based weight adjustments, outputs `final_portfolio.csv` |
-| `04_performance_tracking.ipynb` | Tracks YTD performance, calculates annualised volatility and Sharpe ratios vs benchmarks |
-| `05_rebalancing.ipynb` | Defines rebalancing strategy |
+## Data Provider Config
 
-`curation.ipynb` is a standalone all-in-one notebook with the full pipeline (precursor to the split chapters). `extras_dont_check_in_code.ipynb` is a scratch notebook not intended for check-in.
+Default: **yfinance** (free, no API key). Set in `.env`:
 
-### Data files
-
-JustETF scrape outputs follow the pattern:
 ```
-justetf_class-{equity|bonds}_{market}_{region}.csv
-```
-e.g. `justetf_class-equity_developed_americasanduk.csv`
-
-Benchmark data:
-```
-benchmark_distributing_df*.csv
+DATA_PROVIDER=yfinance          # or alphavantage
+ALPHAVANTAGE_API_KEY=your_key   # only needed for alphavantage
 ```
 
-Portfolio configuration:
-- `etf.json` — manually curated ETF list grouped by region/category (used during curation)
-- `etf_tickers.json` — final selected ETF tickers with region and yield-category labels (`Beta` / `High Yield`)
+Tickers are stored bare (e.g. `VEVE`). `DataProvider` appends `.L` (yfinance) or `.LON` (AlphaVantage) automatically.
 
-Pipeline outputs: `summary_equities.csv`, `summary_bonds.csv`, `summary_all.csv`, `final_portfolio.csv`
+## Weight Scoring Model
 
-### Weight scoring model
-
-ETFs are ranked by a weighted composite of risk-adjusted returns:
+ETFs ranked by weighted composite of risk-adjusted returns:
 - 5-year return/risk: 20%
 - 3-year return/risk: 30%
 - 1-year return/risk: 50%
 
-Sharpe ratio adjustment factors range from 0.6 (poor) to 1.48 (excellent), with equities having ±0.1 sensitivity and bonds ±0.25.
+Sharpe ratio adjustment factors: 0.6 (poor) → 1.48 (excellent). Equities ±0.1 sensitivity, bonds ±0.25.
 
-### Book structure
+## Deployment
 
-`_toc.yml` defines the chapter order. `_config.yml` sets Jupyter Book options including MyST extensions (`dollarmath`, `colon_fence`, `substitution`, `tasklist`). The book is published to GitHub Pages from the `main` branch.
+GitHub Actions (`.github/workflows/deploy-book.yml`) builds and deploys to GitHub Pages on push to `main`. Served at `nairraks.github.io/etf-isa-portfolio`.
+
+## Dependencies
+
+Managed via `pyproject.toml` with `uv`. Key dependencies:
+- `justetf-scraping` from `nairraks/justetf-scraping` fork (not upstream `druzsan`)
+- `yfinance` for price data
+- `jupyter-book` for documentation build
+- `python-dotenv` for `.env` config
