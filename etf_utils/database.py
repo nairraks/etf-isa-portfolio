@@ -25,8 +25,13 @@ def _ensure_init() -> None:
 
 @contextmanager
 def _get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute("PRAGMA journal_mode=WAL")
+    # timeout=30: wait up to 30 s if another process (e.g. cloud-sync) holds a lock.
+    # WAL mode is intentionally NOT used because the DB often lives on Google Drive /
+    # OneDrive / Dropbox, which cannot reliably handle WAL shared-memory files
+    # (.db-wal / .db-shm), causing intermittent "database is locked" / "Execution
+    # failed" errors.  The default DELETE journal mode is safe for our single-writer,
+    # sequential-notebook use case.
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     try:
         yield conn
         conn.commit()
