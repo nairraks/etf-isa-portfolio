@@ -61,7 +61,12 @@ def init_db() -> None:
 # ---------------------------------------------------------------------------
 
 def save_raw_etf_data(df: pd.DataFrame, asset_class: str, region_category: str) -> None:
-    """Replace raw ETF rows for (asset_class, region_category) with *df*."""
+    """Replace raw ETF rows for (asset_class, region_category) with *df*.
+
+    Uses a read-modify-write strategy (replace whole table) so that schema
+    changes between runs (e.g. JustETF adding or removing columns) never cause
+    an ``if_exists='append'`` mismatch error.
+    """
     _ensure_init()
     now = datetime.now(timezone.utc).isoformat()
     df = df.copy()
@@ -70,14 +75,19 @@ def save_raw_etf_data(df: pd.DataFrame, asset_class: str, region_category: str) 
     df["scraped_at"] = now
 
     with _get_connection() as conn:
+        # Load rows for all OTHER (asset_class, region_category) combos.
+        # If the table doesn't exist yet, start with an empty frame.
         try:
-            conn.execute(
-                "DELETE FROM raw_etf_data WHERE asset_class=? AND region_category=?",
-                (asset_class, region_category),
+            existing = pd.read_sql(
+                "SELECT * FROM raw_etf_data WHERE asset_class != ? OR region_category != ?",
+                conn,
+                params=[asset_class, region_category],
             )
-        except sqlite3.OperationalError:
-            pass  # table doesn't exist yet; to_sql will create it
-        df.to_sql("raw_etf_data", conn, if_exists="append", index=False)
+        except Exception:
+            existing = pd.DataFrame()
+
+        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+        combined.to_sql("raw_etf_data", conn, if_exists="replace", index=False)
 
 
 def load_raw_etf_data(
@@ -122,13 +132,16 @@ def save_screened_etfs(
 
     with _get_connection() as conn:
         try:
-            conn.execute(
-                "DELETE FROM screened_etfs WHERE portfolio_year=? AND asset_class=?",
-                (portfolio_year, asset_class),
+            existing = pd.read_sql(
+                "SELECT * FROM screened_etfs WHERE portfolio_year != ? OR asset_class != ?",
+                conn,
+                params=[portfolio_year, asset_class],
             )
-        except sqlite3.OperationalError:
-            pass  # table doesn't exist yet; to_sql will create it
-        df.to_sql("screened_etfs", conn, if_exists="append", index=False)
+        except Exception:
+            existing = pd.DataFrame()
+
+        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+        combined.to_sql("screened_etfs", conn, if_exists="replace", index=False)
 
 
 def load_screened_etfs(
