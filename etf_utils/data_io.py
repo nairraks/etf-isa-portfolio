@@ -79,7 +79,9 @@ def _asset_class_from_intermediate_filename(filename: str) -> str:
         "preciousMetals": "preciousMetals",
         "commodities": "commodities",
     }
-    return mapping.get(suffix, suffix)
+    # Return "all" for unrecognised suffixes so callers skip DB operations
+    # (avoids writing test data or ad-hoc filenames into the database).
+    return mapping.get(suffix, "all")
 
 
 def save_intermediate(df: pd.DataFrame, filename: str, portfolio_year: int = 2026) -> Path:
