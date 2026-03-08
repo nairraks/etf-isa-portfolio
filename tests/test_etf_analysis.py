@@ -71,3 +71,50 @@ class TestETFAnalysis(unittest.TestCase):
         
 if __name__ == '__main__':
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# New asset class tests (pytest-style, no class needed)
+# ---------------------------------------------------------------------------
+
+from etf_utils.data_io import get_asset_class_from_filename
+from etf_utils.metrics import interpolate_adjustment_factor
+
+
+def test_get_asset_class_preciousmetals():
+    assert get_asset_class_from_filename('justetf_class-preciousMetals_global.csv') == 'preciousMetals'
+
+
+def test_get_asset_class_commodities():
+    assert get_asset_class_from_filename('justetf_class-commodities_global.csv') == 'commodities'
+
+
+def test_four_class_weight_normalization():
+    """Normalized weights for 4 asset classes must sum to ~100."""
+    # Fixed inputs
+    eq_risk, bnd_risk, pm_risk, cmd_risk = 80, 10, 5, 5
+    # No Sharpe adjustment (factors = 1.0)
+    eq_adj, bnd_adj, pm_adj, cmd_adj = eq_risk * 1.0, bnd_risk * 1.0, pm_risk * 1.0, cmd_risk * 1.0
+    total = eq_adj + bnd_adj + pm_adj + cmd_adj
+    normalized = [round(w / total * 100, 2) for w in (eq_adj, bnd_adj, pm_adj, cmd_adj)]
+    assert abs(sum(normalized) - 100.0) < 0.1
+
+
+def test_pm_interpolation_with_015_table():
+    """interpolate_adjustment_factor works correctly with the ±0.15 PM/commodities table."""
+    sr_table = {
+        -0.15: 0.6, -0.12: 0.66, -0.09: 0.77, -0.06: 0.85, -0.03: 0.94,
+         0:    1.0,  0.03: 1.11,  0.06: 1.19,  0.09: 1.30,  0.12: 1.37, 0.15: 1.48
+    }
+    # Exact match at 0 → 1.0
+    assert interpolate_adjustment_factor(0, sr_table) == 1.0
+    # Exact match at boundary
+    assert interpolate_adjustment_factor(-0.15, sr_table) == 0.6
+    assert interpolate_adjustment_factor(0.15, sr_table) == 1.48
+    # Clipping below minimum
+    assert interpolate_adjustment_factor(-0.5, sr_table) == 0.6
+    # Clipping above maximum
+    assert interpolate_adjustment_factor(0.5, sr_table) == 1.48
+    # Midpoint between 0 and 0.03: (1.0 + 1.11) / 2 = 1.055
+    result = interpolate_adjustment_factor(0.015, sr_table)
+    assert abs(result - 1.055) < 1e-6
