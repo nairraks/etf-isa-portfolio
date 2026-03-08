@@ -45,6 +45,14 @@ class TestFilenameParsing:
 
 
 class TestSaveLoad:
+    @pytest.fixture(autouse=True)
+    def isolate_db(self, tmp_path, monkeypatch):
+        """Redirect DB_PATH to a throw-away file so tests never touch the real DB."""
+        import etf_utils.database as db_mod
+
+        monkeypatch.setattr(db_mod, "DB_PATH", tmp_path / "test_data_io.db")
+        monkeypatch.setattr(db_mod, "_db_initialized", False)
+
     def test_save_and_load_intermediate(self, tmp_data_dir):
         df = pd.DataFrame({"a": [1, 2], "b": [3, 4]})
         with patch("etf_utils.data_io.DATA_INTERMEDIATE", tmp_data_dir / "intermediate"):
