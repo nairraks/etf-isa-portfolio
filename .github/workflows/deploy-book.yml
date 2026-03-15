@@ -27,7 +27,10 @@ jobs:
         run: uv python install 3.13
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --dev
+
+      - name: Run tests
+        run: uv run pytest tests/ -v
 
       - name: Build the book
         run: uv run jupyter-book build .
