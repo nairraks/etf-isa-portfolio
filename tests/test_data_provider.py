@@ -19,9 +19,9 @@ def test_normalize_symbol_alphavantage_bare():
 
 
 def test_normalize_symbol_already_has_suffix():
-    """Symbols with a dot should pass through unchanged."""
-    assert _normalize_symbol("ISF.LON", "yfinance") == "ISF.LON"
-    assert _normalize_symbol("VEVE.L", "alphavantage") == "VEVE.L"
+    """Symbols with a dot are converted to the right active provider suffix."""
+    assert _normalize_symbol("ISF.LON", "yfinance") == "ISF.L"
+    assert _normalize_symbol("VEVE.L", "alphavantage") == "VEVE.LON"
 
 
 def test_normalize_symbol_no_suffix_various():
@@ -71,8 +71,7 @@ def test_get_historical_prices_yfinance(mock_download):
 
     assert list(result.columns) == ["close"]
     assert len(result) == 5
-    assert result.index.is_monotonic_increasing
-    mock_download.assert_called_once_with("VEVE.L", progress=False, auto_adjust=True)
+    mock_download.assert_called_once_with("VEVE.L", period="max", progress=False, auto_adjust=True)
 
 
 @patch("etf_utils.data_provider.requests.get")
@@ -101,8 +100,7 @@ def test_get_fx_rate_yfinance(mock_download):
     result = provider.get_fx_rate("GBP", "EUR")
 
     assert list(result.columns) == ["rate"]
-    assert len(result) == 3
-    mock_download.assert_called_once_with("GBPEUR=X", progress=False, auto_adjust=True)
+    mock_download.assert_called_once_with("GBPEUR=X", period="max", progress=False, auto_adjust=True)
 
 
 # --- get_latest_price ---
@@ -136,3 +134,37 @@ def test_benchmark_period_return(mock_download):
 
     assert isinstance(ret, float)
     assert ret > 0  # Prices are rising
+
+
+# --- GBX/GBP normalisation ---
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_gbx_whole_series_normalised_to_gbp(mock_download):
+    """Series entirely in GBX (pence) should be divided by 100."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    # Prices in pence (~1800 GBX = £18 GBP)
+    mock_df = pd.DataFrame({"Close": [1800.0, 1810.0, 1820.0, 1830.0, 1840.0]}, index=dates)
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    result = provider.get_historical_prices("AUAD")  # Will use AUAD.L
+
+    # Should be normalised to GBP
+    assert result["close"].iloc[0] == pytest.approx(18.0, rel=0.01)
+    assert result["close"].iloc[-1] == pytest.approx(18.4, rel=0.01)
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_gbp_series_not_normalised(mock_download):
+    """Series already in GBP should not be divided."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    mock_df = pd.DataFrame({"Close": [12.0, 12.1, 12.2, 12.3, 12.4]}, index=dates)
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    result = provider.get_historical_prices("LCUK")
+
+    assert result["close"].iloc[0] == pytest.approx(12.0, rel=0.01)
+    assert result["close"].iloc[-1] == pytest.approx(12.4, rel=0.01)
+

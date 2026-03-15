@@ -28,3 +28,6 @@ data/etf_portfolio.db
 # OS
 .DS_Store
 Thumbs.db
+ 
+ # Gemini/AI local knowledge
+ .gemini/
