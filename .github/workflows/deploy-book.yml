@@ -1,9 +1,11 @@
 name: Deploy Jupyter Book
 
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
+# Temporarily disabled until Pages visibility is confirmed
+# on:
+#   push:
+#     branches: [main]
+#   workflow_dispatch:
+on: []
 
 jobs:
   deploy-book:
