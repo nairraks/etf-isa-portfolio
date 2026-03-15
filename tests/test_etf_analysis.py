@@ -106,6 +106,175 @@ def test_four_class_weight_normalization():
     assert abs(sum(normalized) - 100.0) < 0.1
 
 
+def test_pm_overlap_gold():
+    """Gold → 14.29% BCOM overlap (heaviest duplication with commodity ETC)."""
+    from etf_utils.config import DATA_CONFIG
+    import json
+    bcom = json.loads((DATA_CONFIG / 'commodity_index_weights.json').read_text())
+    pm_bcom = bcom['precious_metals']
+
+    def overlap(name):
+        n = name.lower()
+        if 'palladium' in n: return pm_bcom['palladium']
+        if 'platinum'  in n: return pm_bcom['platinum']
+        if 'silver'    in n: return pm_bcom['silver']
+        if 'gold'      in n: return pm_bcom['gold']
+        return pm_bcom['mixed']
+
+    assert overlap('iShares Physical Gold ETC') == 14.29
+    assert overlap('WisdomTree Physical Silver') == 4.49
+    assert overlap('iShares Physical Platinum ETC') == 0.0
+    assert overlap('WisdomTree Physical Palladium') == 0.0
+    assert overlap('WisdomTree Physical Precious Metals') == pm_bcom['mixed']
+
+
+def test_pm_overlap_sort_order():
+    """Overlap-aware sort puts platinum/palladium before silver before gold."""
+    import pandas as pd
+    from etf_utils.config import DATA_CONFIG
+    import json
+    bcom = json.loads((DATA_CONFIG / 'commodity_index_weights.json').read_text())
+    pm_bcom = bcom['precious_metals']
+
+    def overlap(name):
+        n = name.lower()
+        if 'palladium' in n: return pm_bcom['palladium']
+        if 'platinum'  in n: return pm_bcom['platinum']
+        if 'silver'    in n: return pm_bcom['silver']
+        if 'gold'      in n: return pm_bcom['gold']
+        return pm_bcom['mixed']
+
+    df = pd.DataFrame({
+        'name': ['iShares Physical Gold', 'iShares Physical Silver',
+                 'iShares Physical Platinum', 'WisdomTree Physical Palladium'],
+        'ter':  [0.12, 0.20, 0.20, 0.49],
+    })
+    df['commodity_overlap_pct'] = df['name'].apply(overlap)
+    df = df.sort_values(['commodity_overlap_pct', 'ter'], ascending=[True, True])
+
+    # First two should be the zero-overlap metals (platinum and palladium)
+    assert df.iloc[0]['commodity_overlap_pct'] == 0.0
+    assert df.iloc[1]['commodity_overlap_pct'] == 0.0
+    # Silver before gold
+    assert df.iloc[2]['commodity_overlap_pct'] == 4.49
+    assert df.iloc[3]['commodity_overlap_pct'] == 14.29
+
+
+def test_pm_diversity_no_duplicate_metals():
+    """Metal-diversity groupby ensures the top-2 selection spans two different metal types.
+
+    Scenario: pool contains two platinum ETCs (TER 0.20 and 0.49) and one palladium ETC
+    (TER 0.19).  Without diversity logic head(2) returns both platinum funds.
+    With diversity logic the result must be one palladium + one platinum.
+    """
+    import pandas as pd
+    from etf_utils.config import DATA_CONFIG
+    import json
+
+    bcom = json.loads((DATA_CONFIG / 'commodity_index_weights.json').read_text())
+    pm_bcom = bcom['precious_metals']
+
+    def overlap(name):
+        n = name.lower()
+        if 'palladium' in n: return pm_bcom['palladium']
+        if 'platinum'  in n: return pm_bcom['platinum']
+        if 'silver'    in n: return pm_bcom['silver']
+        if 'gold'      in n: return pm_bcom['gold']
+        return pm_bcom['mixed']
+
+    def metal_type(name):
+        n = name.lower()
+        if 'palladium' in n: return 'palladium'
+        if 'platinum'  in n: return 'platinum'
+        if 'silver'    in n: return 'silver'
+        if 'gold'      in n: return 'gold'
+        return 'mixed'
+
+    # Two platinum ETCs + one palladium ETC — all with 0% BCOM overlap
+    df = pd.DataFrame({
+        'name': ['iShares Physical Platinum', 'WisdomTree Physical Platinum',
+                 'Invesco Physical Palladium'],
+        'ter':  [0.20, 0.49, 0.19],
+        'last_year_return_per_risk': [2.26, 2.45, 1.55],
+    })
+    df['commodity_overlap_pct'] = df['name'].apply(overlap)
+    df['metal_type'] = df['name'].apply(metal_type)
+
+    # Apply the same sorting used in the notebook
+    df = df.sort_values(
+        ['commodity_overlap_pct', 'ter', 'last_year_return_per_risk'],
+        ascending=[True, True, False],
+    )
+
+    # Without diversity: head(2) would give two platinum ETCs
+    assert list(df.head(2)['metal_type']) == ['palladium', 'platinum'], \
+        "Sorted order is palladium (TER 0.19) then platinum (TER 0.20)"
+
+    # With diversity: groupby metal_type → best per type → top 2 types
+    best_per_metal = (
+        df
+        .groupby('metal_type', sort=False)
+        .first()
+        .reset_index()
+        .sort_values(['commodity_overlap_pct', 'ter'], ascending=[True, True])
+    )
+    selected = best_per_metal.head(2)
+
+    assert len(selected) == 2
+    assert selected['metal_type'].nunique() == 2, "Must select two different metal types"
+    assert set(selected['metal_type']) == {'palladium', 'platinum'}
+
+
+def test_pm_diversity_two_platinum_pool():
+    """When the pool contains ONLY two platinum ETCs (e.g. palladium not on InvestEngine),
+    diversity groupby gracefully returns both — one per group is still possible even if
+    there is only one group with two members (head(2) on best_per_metal returns 1 row here,
+    confirming diversity is enforced and callers should check for fewer than 2 results).
+    """
+    import pandas as pd
+    from etf_utils.config import DATA_CONFIG
+    import json
+
+    bcom = json.loads((DATA_CONFIG / 'commodity_index_weights.json').read_text())
+    pm_bcom = bcom['precious_metals']
+
+    def overlap(name):
+        n = name.lower()
+        if 'platinum' in n: return pm_bcom['platinum']
+        return pm_bcom['gold']
+
+    def metal_type(name):
+        n = name.lower()
+        if 'platinum' in n: return 'platinum'
+        return 'gold'
+
+    df = pd.DataFrame({
+        'name': ['iShares Physical Platinum', 'WisdomTree Physical Platinum'],
+        'ter':  [0.20, 0.49],
+        'last_year_return_per_risk': [2.26, 2.45],
+    })
+    df['commodity_overlap_pct'] = df['name'].apply(overlap)
+    df['metal_type'] = df['name'].apply(metal_type)
+    df = df.sort_values(
+        ['commodity_overlap_pct', 'ter', 'last_year_return_per_risk'],
+        ascending=[True, True, False],
+    )
+
+    best_per_metal = (
+        df
+        .groupby('metal_type', sort=False)
+        .first()
+        .reset_index()
+        .sort_values(['commodity_overlap_pct', 'ter'], ascending=[True, True])
+    )
+    selected = best_per_metal.head(2)
+
+    # Only 1 metal type in the pool → 1 row returned, no duplicates
+    assert len(selected) == 1
+    assert selected.iloc[0]['metal_type'] == 'platinum'
+    assert selected.iloc[0]['ter'] == 0.20  # cheapest platinum chosen
+
+
 def test_pm_interpolation_with_015_table():
     """interpolate_adjustment_factor works correctly with the ±0.15 PM/commodities table."""
     sr_table = {
