@@ -77,8 +77,7 @@ def _asset_class_from_intermediate_filename(filename: str) -> str:
         "bonds":          "bonds",
         "preciousmetals": "preciousMetals",
         "preciousMetals": "preciousMetals",
-        "energy":         "energy",
-        "agri":           "agri",
+        "commodities":    "commodities",
     }
     # Return "all" for unrecognised suffixes so callers skip DB operations
     # (avoids writing test data or ad-hoc filenames into the database).
