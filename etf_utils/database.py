@@ -149,6 +149,23 @@ def save_screened_etfs(
         combined.to_sql("screened_etfs", conn, if_exists="replace", index=False)
 
 
+def purge_screened_etfs_for_year(portfolio_year: int = 2026) -> int:
+    """Delete ALL screened ETF rows for *portfolio_year*.
+
+    Useful after changing the portfolio model (e.g. adding/removing asset classes)
+    to avoid stale rows causing KeyErrors in sr_data_map lookups.
+    Returns the number of rows deleted.
+    """
+    _ensure_init()
+    with _get_connection() as conn:
+        cur = conn.execute(
+            "DELETE FROM screened_etfs WHERE portfolio_year = ?",
+            (portfolio_year,),
+        )
+        deleted = cur.rowcount
+    return deleted
+
+
 def load_screened_etfs(
     asset_class: str | None = None,
     portfolio_year: int = 2026,
