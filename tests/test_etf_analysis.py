@@ -275,6 +275,49 @@ def test_pm_diversity_two_platinum_pool():
     assert selected.iloc[0]['ter'] == 0.20  # cheapest platinum chosen
 
 
+def test_pm_within_metal_beta_filters_laggards():
+    """Within-metal beta filter (threshold 0.93 vs group median) removes commodity-style
+    ETPs that underperform physically-backed peers in the same metal group.
+
+    Gold group median ≈ 53.33%.  XGLD (47.27%) → beta 0.886 → filtered.
+    Silver group median ≈ 131.29%. SLVR (119.72%) → beta 0.912 → filtered.
+    Platinum: SPLT (105.93%) and PPTX (105.37%) are near-identical → both pass.
+    """
+    import pandas as pd
+
+    data = {
+        'name':   ['iShares Physical Gold ETC', 'Xetra-Gold', 'Xtrackers Physical Gold ETC',
+                   'iShares Physical Silver ETC', 'Xtrackers IE Physical Silver ETC',
+                   'WisdomTree Silver',
+                   'iShares Physical Platinum ETC', 'WisdomTree Physical Platinum'],
+        'ticker': ['SGLN', '4GLD', 'XGLD', 'SSLN', 'XSLR', 'SLVR', 'SPLT', 'PPTX'],
+        '2025':   [53.33, 57.03, 47.27, 131.29, 144.17, 119.72, 105.93, 105.37],
+    }
+
+    def metal_type(name):
+        n = name.lower()
+        if 'platinum' in n: return 'platinum'
+        if 'silver'   in n: return 'silver'
+        if 'gold'     in n: return 'gold'
+        return 'mixed'
+
+    df = pd.DataFrame(data)
+    df['metal_type'] = df['name'].apply(metal_type)
+
+    metal_group_median = df.groupby('metal_type')['2025'].transform('median')
+    df['within_metal_beta'] = df['2025'] / metal_group_median
+    passing = df[df['within_metal_beta'] >= 0.93]
+
+    # Laggards should be removed
+    assert 'XGLD' not in passing['ticker'].values   # beta 0.886
+    assert 'SLVR' not in passing['ticker'].values   # beta 0.912
+    # Good ETCs should pass
+    assert 'SGLN' in passing['ticker'].values
+    assert 'SSLN' in passing['ticker'].values
+    assert 'SPLT' in passing['ticker'].values
+    assert 'PPTX' in passing['ticker'].values
+
+
 def test_commodity_beta_filter_removes_underperformers():
     """Beta >= 1 filter keeps only ETCs that matched/beat the CMOP 2025 benchmark.
 
