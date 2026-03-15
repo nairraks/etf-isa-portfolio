@@ -114,7 +114,7 @@ Three tables, all written via `pandas.to_sql` / `read_sql`:
 ## Portfolio Versioning
 
 - **Year 2025** (locked): 2-asset-class portfolio (equity/bonds). Seeded from `final_portfolio.csv` / `final_portfolio_25.csv` by `seed_2025_portfolio()` called in notebook 03 setup.
-- **Year 2026** (mutable): 5-asset-class portfolio. Overwritten on each notebook 03 run until explicitly locked via `lock_portfolio(2026)`.
+- **Year 2026** (mutable): 4-asset-class portfolio. Overwritten on each notebook 03 run until explicitly locked via `lock_portfolio(2026)`.
 
 ## Data Provider Config
 
@@ -129,27 +129,27 @@ Tickers are stored bare (e.g. `VEVE`). `DataProvider` appends `.L` (yfinance) or
 
 ## Weight Scoring Model
 
-**Asset class allocation (2026):** 65% Equities / 10% Bonds / 5% Precious Metals / 5% Energy / 5% Agriculture
+**Asset class allocation (2026):** 65% Equities / 10% Bonds / 5% Precious Metals / 10% Commodities
 
 **Benchmarks:**
 - Equities: VEVE.L
 - Bonds: SAAA.L
 - Precious Metals: SGLN.L (iShares Physical Gold ETC)
-- Energy: CRUD.L (WisdomTree WTI Crude Oil)
-- Agriculture: AIGA.L (WisdomTree Agriculture)
+- Commodities: CMOP.L (Invesco Bloomberg Commodity — broad: ~30% energy, ~20% agri, metals)
 
 **Intra-asset Sharpe sensitivity:**
 - Equities: ±0.1
 - Bonds: ±0.25
 - Precious Metals: ±0.15
-- Energy: ±0.15
-- Agriculture: ±0.15
+- Commodities: ±0.15
 
 Sharpe ratio adjustment factors: 0.6 (poor) → 1.48 (excellent) across all asset classes.
 
-**Scraping:** equity/bonds scraped per country/currency; preciousMetals/commodities scraped once globally (single `_global.csv`). Energy and Agriculture ETCs are keyword-filtered from the commodities universe at screening time (notebook 02).
+**Scraping:** equity/bonds scraped per country/currency; preciousMetals/commodities scraped once globally (single `_global.csv`). Pure energy/agriculture ETCs (CRUD, AIGA etc.) are not listed on InvestEngine; broad commodity ETCs (CMOP, COMM, COMX, ENCG) are available and selected instead.
 
-**Distributing filter:** equity/bonds require `dividends == 'Distributing'`; preciousMetals/energy/agriculture allow accumulating ETCs.
+**Distributing filter:** equity/bonds require `dividends == 'Distributing'`; preciousMetals/commodities allow accumulating ETCs.
+
+**InvestEngine API:** uses `v0.31`. Availability check does exact ticker match (not fuzzy length check).
 
 ETFs ranked by weighted composite of risk-adjusted returns:
 - 5-year return/risk: 20%
