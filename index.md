@@ -54,7 +54,7 @@ Weights are then adjusted up or down based on each ETF's Sharpe ratio relative t
 │  ✓ Distributing (pays dividends)      ✓ Size > £100M                        │
 │  ✓ Size > £100M                       ✓ TER (cost) < 0.60%                  │
 │  ✓ TER < 0.50%                        ✓ Not currency-hedged                 │
-│  ✓ Available on InvestEngine                                                 │
+│  ✓ Available on InvestEngine          ✓ Available on InvestEngine            │
 │  ✓ Beta ≥ 1 vs. 2025 benchmark        Energy → Oil/Crude/Gas keyword filter │
 │                                       Agri   → Wheat/Corn/Soy keyword filter│
 │                                                                              │
