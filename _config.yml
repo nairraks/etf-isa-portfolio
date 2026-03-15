@@ -2,7 +2,7 @@ title: DIY ETF ISA Portfolio Guide
 author: nairraks
 copyright: "2025"
 logo: ""
-exclude_patterns: [README.md, archive/]
+exclude_patterns: [README.md, "archive/**"]
 
 # Off during refactoring — switch to "cache" once pipeline is stable
 execute:
