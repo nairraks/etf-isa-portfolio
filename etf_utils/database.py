@@ -212,11 +212,20 @@ def save_portfolio(df: pd.DataFrame, year: int = 2026) -> None:
         df["portfolio_year"] = year
         df["created_at"] = now
 
+        # Read-modify-write: preserve other years' rows and handle schema changes
+        # (e.g. new columns added to the ETF data) without OperationalError.
+        # Mirrors the strategy used by save_screened_etfs / save_raw_etf_data.
         try:
-            conn.execute("DELETE FROM portfolios WHERE portfolio_year = ?", (year,))
-        except sqlite3.OperationalError:
-            pass  # table doesn't exist yet; to_sql will create it
-        df.to_sql("portfolios", conn, if_exists="append", index=False)
+            existing = pd.read_sql(
+                "SELECT * FROM portfolios WHERE portfolio_year != ?",
+                conn,
+                params=[year],
+            )
+        except Exception:
+            existing = pd.DataFrame()
+
+        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+        combined.to_sql("portfolios", conn, if_exists="replace", index=False)
 
         conn.execute(
             """
