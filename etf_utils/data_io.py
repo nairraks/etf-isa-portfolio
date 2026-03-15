@@ -73,11 +73,12 @@ def _asset_class_from_intermediate_filename(filename: str) -> str:
     suffix = parts[1] if len(parts) > 1 else stem  # 'equities', 'bonds', 'all', etc.
     # Normalise plurals so they match the asset_class values used in the DB
     mapping = {
-        "equities": "equity",
-        "bonds": "bonds",
+        "equities":       "equity",
+        "bonds":          "bonds",
         "preciousmetals": "preciousMetals",
         "preciousMetals": "preciousMetals",
-        "commodities": "commodities",
+        "energy":         "energy",
+        "agri":           "agri",
     }
     # Return "all" for unrecognised suffixes so callers skip DB operations
     # (avoids writing test data or ad-hoc filenames into the database).
