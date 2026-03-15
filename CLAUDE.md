@@ -12,7 +12,7 @@ A Jupyter Book documenting a systematic DIY ETF portfolio targeting 10% real ann
 # Install dependencies (uses uv, not pip)
 uv sync
 
-# Run tests (50 tests across 6 files)
+# Run tests (60+ tests across 7 files)
 uv run pytest tests/ -v
 
 # Build the Jupyter Book
@@ -20,6 +20,9 @@ uv run jupyter-book build .
 
 # Quick import check
 uv run python -c "from etf_utils.data_provider import DataProvider; print('OK')"
+
+# Verify DB layer
+uv run python -c "from etf_utils.database import init_db; init_db(); print('DB OK')"
 ```
 
 Book output goes to `_build/html/`. Execution is currently `off` (set to `cache` once pipeline is stable).
@@ -34,21 +37,25 @@ etf-isa-portfolio/
 ├── .env / .env.example          # Data provider config
 │
 ├── notebooks/                   # Chapter notebooks (executed in order)
-│   ├── 01_data_collection.ipynb
-│   ├── 02_etf_screening.ipynb
-│   ├── 03_portfolio_construction.ipynb
-│   └── 04_performance_tracking.ipynb
+│   ├── 01_data_collection.ipynb  # Scrapes equity, bonds, preciousMetals, commodities
+│   ├── 02_etf_screening.ipynb    # Screens all 4 asset classes, writes to DB
+│   ├── 03_portfolio_construction.ipynb  # 4-class weights, versioning, DB save
+│   └── 04_performance_tracking.ipynb    # Loads from DB, tracks P&L
 │
 ├── data/
 │   ├── raw/                     # JustETF scrape outputs (justetf_class-*.csv)
-│   ├── intermediate/            # summary_*.csv, benchmark_*.csv
-│   ├── output/                  # final_portfolio.csv
+│   │                            #   equity/bonds: per-region CSV files
+│   │                            #   preciousMetals/commodities: _global.csv
+│   ├── intermediate/            # summary_*.csv backups (source of truth is DB)
+│   ├── output/                  # final_portfolio.csv backup + final_portfolio_25.csv
+│   ├── etf_portfolio.db         # SQLite database (all intermediate + portfolio data)
 │   └── config/                  # etf.json, etf_tickers.json
 │
 ├── etf_utils/                   # Shared Python package
-│   ├── config.py                # .env loading, path constants
+│   ├── config.py                # .env loading, path constants (incl. DB_PATH)
+│   ├── database.py              # SQLite layer: raw/screened/portfolio CRUD + versioning
 │   ├── data_provider.py         # yfinance/AlphaVantage abstraction
-│   ├── data_io.py               # CSV read/write helpers
+│   ├── data_io.py               # CSV helpers + DB delegates for save/load
 │   ├── metrics.py               # Sharpe ratio, volatility, returns, PnL
 │   └── platform_check.py        # InvestEngine availability check
 │
@@ -59,7 +66,8 @@ etf-isa-portfolio/
 │   ├── test_data_provider.py
 │   ├── test_metrics.py
 │   ├── test_platform_check.py
-│   └── test_etf_analysis.py     # Legacy integration tests
+│   ├── test_database.py         # SQLite layer tests (monkeypatched tmp DB)
+│   └── test_etf_analysis.py     # Integration tests + 4-class weight tests
 │
 ├── archive/                     # Legacy notebooks (not in book)
 │   ├── curation.ipynb
@@ -72,19 +80,41 @@ etf-isa-portfolio/
 ## Pipeline Flow
 
 ```
-01_data_collection → data/raw/*.csv → 02_etf_screening → data/intermediate/summary_all.csv
-→ 03_portfolio_construction → data/output/final_portfolio.csv → 04_performance_tracking
+01_data_collection → data/raw/*.csv + raw_etf_data table
+                   → 02_etf_screening → screened_etfs table + summary_*.csv backups
+                   → 03_portfolio_construction → portfolios table (year=2026)
+                                               + final_portfolio.csv backup
+                   → 04_performance_tracking (loads from DB year=2026)
 ```
 
 ## etf_utils Module Index
 
 | Module | Key exports |
 |--------|------------|
-| `config.py` | `DATA_RAW`, `DATA_INTERMEDIATE`, `DATA_OUTPUT`, `DATA_CONFIG`, `PROJECT_ROOT`, `DATA_PROVIDER` |
+| `config.py` | `DATA_RAW`, `DATA_INTERMEDIATE`, `DATA_OUTPUT`, `DATA_CONFIG`, `DB_PATH`, `PROJECT_ROOT`, `DATA_PROVIDER` |
+| `database.py` | `save_raw_etf_data()`, `load_raw_etf_data()`, `save_screened_etfs()`, `load_screened_etfs()`, `save_portfolio()`, `load_portfolio()`, `lock_portfolio()`, `list_portfolio_versions()`, `seed_2025_portfolio()`, `PortfolioLockedError` |
 | `data_provider.py` | `DataProvider` — unified class: `get_historical_prices()`, `get_fx_rate()`, `get_latest_price()`, `get_benchmark_period_return()` |
-| `data_io.py` | `load_raw_etf_data()`, `save_intermediate()`, `load_intermediate()`, `save_output()`, `load_output()`, `load_config()`, filename parsers |
+| `data_io.py` | `load_raw_etf_data()`, `save_intermediate()`, `load_intermediate()`, `save_output()`, `load_output()`, `load_config()`, filename parsers — intermediate/output functions delegate to DB |
 | `metrics.py` | `calculate_annualized_volatility()`, `calculate_sharpe_ratio()`, `interpolate_adjustment_factor()`, `calculate_period_metrics()`, `calculate_daily_pnl()` |
 | `platform_check.py` | `check_etf_availability()` — queries InvestEngine API |
+
+## SQLite Database (`data/etf_portfolio.db`)
+
+Three tables, all written via `pandas.to_sql` / `read_sql`:
+
+| Table | Key columns | Description |
+|-------|-------------|-------------|
+| `raw_etf_data` | `asset_class`, `region_category`, `scraped_at` | Raw JustETF scrape data |
+| `screened_etfs` | `portfolio_year`, `asset_class`, `screened_at` | Filtered/ranked ETFs per year |
+| `portfolios` | `portfolio_year`, `created_at` | Final portfolio weights + investments |
+| `portfolio_meta` | `year`, `is_locked`, `locked_at` | Version lock metadata |
+
+**Versioning**: `save_portfolio(df, year=2026)` raises `PortfolioLockedError` if `is_locked=1`. Call `lock_portfolio(year)` to freeze a year permanently. `seed_2025_portfolio()` imports the existing CSV as year=2025 locked (idempotent).
+
+## Portfolio Versioning
+
+- **Year 2025** (locked): 2-asset-class portfolio (equity/bonds). Seeded from `final_portfolio.csv` / `final_portfolio_25.csv` by `seed_2025_portfolio()` called in notebook 03 setup.
+- **Year 2026** (mutable): 4-asset-class portfolio. Overwritten on each notebook 03 run until explicitly locked via `lock_portfolio(2026)`.
 
 ## Data Provider Config
 
@@ -99,12 +129,32 @@ Tickers are stored bare (e.g. `VEVE`). `DataProvider` appends `.L` (yfinance) or
 
 ## Weight Scoring Model
 
+**Asset class allocation (2026):** 65% Equities / 10% Bonds / 5% Precious Metals / 10% Commodities
+
+**Benchmarks:**
+- Equities: VEVE.L
+- Bonds: SAAA.L
+- Precious Metals: SGLN.L (iShares Physical Gold ETC)
+- Commodities: CMOP.L (Invesco Bloomberg Commodity — broad: ~30% energy, ~20% agri, metals)
+
+**Intra-asset Sharpe sensitivity:**
+- Equities: ±0.1
+- Bonds: ±0.25
+- Precious Metals: ±0.15
+- Commodities: ±0.15
+
+Sharpe ratio adjustment factors: 0.6 (poor) → 1.48 (excellent) across all asset classes.
+
+**Scraping:** equity/bonds scraped per country/currency; preciousMetals/commodities scraped once globally (single `_global.csv`). Pure energy/agriculture ETCs (CRUD, AIGA etc.) are not listed on InvestEngine; broad commodity ETCs (CMOP, COMM, COMX, ENCG) are available and selected instead.
+
+**Distributing filter:** equity/bonds require `dividends == 'Distributing'`; preciousMetals/commodities allow accumulating ETCs.
+
+**InvestEngine API:** uses `v0.31`. Availability check does exact ticker match (not fuzzy length check).
+
 ETFs ranked by weighted composite of risk-adjusted returns:
 - 5-year return/risk: 20%
 - 3-year return/risk: 30%
 - 1-year return/risk: 50%
-
-Sharpe ratio adjustment factors: 0.6 (poor) → 1.48 (excellent). Equities ±0.1 sensitivity, bonds ±0.25.
 
 ## Deployment
 
