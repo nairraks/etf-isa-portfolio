@@ -26,10 +26,38 @@ def calculate_sharpe_ratio(
     annual_volatility: float,
     risk_free_rate: float = 0.0,
 ) -> float:
-    """Return the Sharpe ratio given annualized return and volatility."""
-    if annual_volatility == 0:
+    """Return the Sharpe ratio given annualized return and volatility.
+
+    Args:
+        annual_return: Annualized return (e.g. 0.12 for 12%).
+        annual_volatility: Annualized volatility (e.g. 0.20 for 20%).
+        risk_free_rate: Annualized risk-free rate (e.g. 0.04 for 4%).
+    """
+    if annual_volatility <= 0:
         return float("nan")
     return (annual_return - risk_free_rate) / annual_volatility
+
+
+def calculate_portfolio_volatility(
+    returns_df: pd.DataFrame,
+    weights: pd.Series,
+    period: int = 252,
+) -> float:
+    """Return annualized portfolio volatility using covariance.
+
+    Args:
+        returns_df: DataFrame where each column is an asset's daily returns.
+        weights: Series of weights indexed by ticker (must match columns).
+        period: Number of trading days per year.
+    """
+    if returns_df.empty or weights.empty:
+        return float("nan")
+
+    # Align weights with columns
+    w = weights.reindex(returns_df.columns).fillna(0).values
+    cov_matrix = returns_df.cov() * period
+    portfolio_var = np.dot(w.T, np.dot(cov_matrix, w))
+    return float(np.sqrt(portfolio_var)) if portfolio_var > 0 else 0.0
 
 
 def interpolate_adjustment_factor(

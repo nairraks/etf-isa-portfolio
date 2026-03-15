@@ -1,0 +1,47 @@
+{
+  "_comment": "Bloomberg Commodity Index (BCOM) target weights used by CMOP/COMM/COMX benchmark ETCs. Update annually when Bloomberg publishes new target weights (typically October). Source: https://www.bloomberg.com/company/press/bloomberg-commodity-index-XXXX-target-weights-announced/",
+  "year": 2025,
+  "source_url": "https://www.prnewswire.com/news-releases/bloomberg-commodity-index-2025-target-weights-announced-302290528.html",
+  "precious_metals": {
+    "_comment": "Overlap % of each metal in BCOM. Used to deprioritise PM ETCs that duplicate commodity allocation. Platinum and palladium are NOT in BCOM — they add fully new exposure. Gold hits the 15% individual cap.",
+    "gold": 14.29,
+    "silver": 4.49,
+    "platinum": 0.0,
+    "palladium": 0.0,
+    "mixed": 18.78
+  },
+  "group_weights": {
+    "energy": 30.01,
+    "grains": 23.15,
+    "industrial_metals": 15.12,
+    "precious_metals": 18.78,
+    "softs": 7.61,
+    "livestock": 5.33
+  },
+  "components": {
+    "brent_crude_oil": 8.03,
+    "natural_gas": 7.78,
+    "wti_crude_oil": 6.97,
+    "low_sulphur_gas_oil": 2.86,
+    "uls_diesel": 2.20,
+    "rbob_gasoline": 2.17,
+    "soybeans": 5.97,
+    "corn": 5.62,
+    "soybean_meal": 3.53,
+    "soybean_oil": 3.36,
+    "wheat": 2.83,
+    "hrw_wheat": 1.84,
+    "copper": 5.37,
+    "aluminum": 4.16,
+    "nickel": 2.40,
+    "zinc": 2.27,
+    "lead": 0.92,
+    "gold": 14.29,
+    "silver": 4.49,
+    "coffee": 3.01,
+    "sugar": 3.00,
+    "cotton": 1.61,
+    "live_cattle": 3.59,
+    "lean_hogs": 1.73
+  }
+}
