@@ -134,8 +134,18 @@ class DataProvider:
         start: datetime.date | str,
         end: datetime.date | str,
     ) -> float:
-        """Return the total return (as a fraction) over [start, end]."""
-        df = self.get_historical_prices(symbol, start_date=start, end_date=end)
+        """Return the total return (as a fraction) over [start, end].
+
+        Returns ``float("nan")`` if the symbol has no data (e.g. delisted).
+        """
+        try:
+            df = self.get_historical_prices(symbol, start_date=start, end_date=end)
+        except ValueError as exc:
+            warnings.warn(
+                f"Could not fetch data for {symbol!r}: {exc}",
+                stacklevel=2,
+            )
+            return float("nan")
         if len(df) < 2:
             warnings.warn(
                 f"Fewer than 2 price points for {symbol!r} in [{start}, {end}]",
