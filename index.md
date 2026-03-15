@@ -12,22 +12,21 @@ This book documents a data-driven approach to ETF investing using publicly avail
 
 ## Investment Approach
 
-The portfolio targets **distributing (income) UCITS ETFs** across five asset classes, weighted by a composite Sharpe ratio score:
+The portfolio targets **distributing (income) UCITS ETFs** across four asset classes, weighted by a composite Sharpe ratio score:
 
-| Asset Class | Target Weight |
-|---|---|
-| Equities | 65% |
-| Bonds | 10% |
-| Precious Metals | 5% |
-| Energy | 5% |
-| Agriculture | 5% |
+| Asset Class | Target Weight | Benchmark |
+|---|---|---|
+| Equities | 65% | VEVE.L (Vanguard FTSE Dev World) |
+| Bonds | 10% | SAAA.L (SPDR Bloomberg 0–3Y US Agg) |
+| Precious Metals | 5% | SGLN.L (iShares Physical Gold ETC) |
+| Commodities | 10% | CMOP.L (Invesco Bloomberg Commodity) |
 
 ETFs are ranked per region using a weighted composite of risk-adjusted returns:
 - 50% weight on 1-year risk-adjusted return
 - 30% weight on 3-year risk-adjusted return
 - 20% weight on 5-year risk-adjusted return
 
-Weights are then adjusted up or down based on each ETF's Sharpe ratio relative to its asset-class benchmark, and normalised to sum to 100%.
+Weights are then adjusted up or down based on each asset class's Sharpe ratio relative to its benchmark, and normalised to sum to 100%.
 
 ## How the Portfolio Is Built
 
@@ -40,7 +39,7 @@ Weights are then adjusted up or down based on each ETF's Sharpe ratio relative t
 │       ├──▶  Equities         (683 UK · 142 APAC · 88 EMEA · 94 Emerging)    │
 │       ├──▶  Bonds            (537 UK · 424 EMEA · 30 Emerging)              │
 │       ├──▶  Precious Metals  (52 ETCs globally)                              │
-│       └──▶  Commodities      (121 ETCs globally → Energy + Agriculture)     │
+│       └──▶  Commodities      (121 ETCs globally)                            │
 │                                                                              │
 │  Output: raw CSV files saved to data/raw/                                   │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -50,17 +49,22 @@ Weights are then adjusted up or down based on each ETF's Sharpe ratio relative t
 │  STEP 2 — ETF SCREENING  (notebook 02)                                       │
 │  "Pick only the best — filter out the noise"                                 │
 │                                                                              │
-│  Equities & Bonds:                    Precious Metals / Energy / Agriculture:│
+│  Equities & Bonds:                    Precious Metals:                       │
 │  ✓ Distributing (pays dividends)      ✓ Size > £100M                        │
-│  ✓ Size > £100M                       ✓ TER (cost) < 0.60%                  │
+│  ✓ Size > £100M                       ✓ TER < 0.60%                         │
 │  ✓ TER < 0.50%                        ✓ Not currency-hedged                 │
-│  ✓ Available on InvestEngine          ✓ Available on InvestEngine            │
-│  ✓ Beta ≥ 1 vs. 2025 benchmark        Energy → Oil/Crude/Gas keyword filter │
-│                                       Agri   → Wheat/Corn/Soy keyword filter│
+│  ✓ Beta ≥ 1 vs. 2025 benchmark        ✓ Available on InvestEngine            │
+│  ✓ Available on InvestEngine          ✓ Overlap-aware: prefer platinum &     │
+│                                         palladium (0% in BCOM index) over   │
+│                                         silver (4.49%) and gold (14.29%)    │
+│                                       ✓ Metal diversity: one ETC per metal  │
 │                                                                              │
-│  2025 benchmarks: VEVE · SAAA · SGLN · CRUD · AIGA                         │
+│  Commodities:                                                                │
+│  ✓ Size > £100M  ✓ TER < 0.60%  ✓ Not hedged                               │
+│  ✓ Beta ≥ 1 vs. 2025 CMOP benchmark                                         │
+│  ✓ Available on InvestEngine (naturally keeps broad diversified ETCs only)  │
 │                                                                              │
-│  Output: ~18 shortlisted ETFs saved to database                             │
+│  Output: ~14 shortlisted ETFs saved to database                             │
 └──────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
@@ -69,11 +73,10 @@ Weights are then adjusted up or down based on each ETF's Sharpe ratio relative t
 │  "Decide how much money goes where"                                          │
 │                                                                              │
 │  ① Start with strategic target weights:                                      │
-│     Equities  65% ──────────────────────────────────────────────────────    │
-│     Bonds     10% ──────                                                     │
-│     Gold       5% ───                                                        │
-│     Energy     5% ───                                                        │
-│     Agri       5% ───                                                        │
+│     Equities    65% ────────────────────────────────────────────────────    │
+│     Bonds       10% ──────                                                   │
+│     Gold         5% ───                                                      │
+│     Commodities 10% ──────                                                   │
 │                                                                              │
 │  ② Adjust weights based on Sharpe ratio vs. benchmark:                       │
 │     Better than benchmark → weight UP   (up to ×1.48)                       │
@@ -83,7 +86,7 @@ Weights are then adjusted up or down based on each ETF's Sharpe ratio relative t
 │                                                                              │
 │  ④ Reduce weight of volatile assets (volatility adjustment)                  │
 │                                                                              │
-│  Output: final_portfolio.csv  (e.g. £20,000 split across ~18 ETFs)         │
+│  Output: final_portfolio.csv  (e.g. £20,000 split across ~14 ETFs)         │
 └──────────────────────────────────────────────────────────────────────────────┘
                                     │
                                     ▼
