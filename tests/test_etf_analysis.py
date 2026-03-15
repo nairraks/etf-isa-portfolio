@@ -58,7 +58,7 @@ class TestETFAnalysis(unittest.TestCase):
         # Mock successful response
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = [{'symbol': 'ETF1', 'available': True}]
+        mock_response.json.return_value = [{'ticker': 'ETF1', 'available': True}]
         mock_get.return_value = mock_response
 
         # Import the actual function
