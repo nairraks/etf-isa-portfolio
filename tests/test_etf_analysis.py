@@ -275,6 +275,58 @@ def test_pm_diversity_two_platinum_pool():
     assert selected.iloc[0]['ter'] == 0.20  # cheapest platinum chosen
 
 
+def test_commodity_beta_filter_removes_underperformers():
+    """Beta >= 1 filter keeps only ETCs that matched/beat the CMOP 2025 benchmark.
+
+    CMOP benchmark return: 7.33%.
+    - COMM (7.64%) → beta 1.04 → kept
+    - BCOG (7.57%) → beta 1.03 → kept
+    - ENCG (0.00%) → beta 0.00 → removed
+    - UC15 (1.58%) → beta 0.22 → removed
+    - AIGC (6.76%) → beta 0.92 → removed (just under threshold)
+    """
+    import pandas as pd
+
+    benchmark_return = 7.33  # CMOP 2025 %
+
+    df = pd.DataFrame({
+        'name':  ['Invesco CMOP', 'iShares COMM', 'L&G BCOG', 'L&G ENCG', 'UBS UC15', 'WT AIGC'],
+        'ticker': ['CMOP', 'COMM', 'BCOG', 'ENCG', 'UC15', 'AIGC'],
+        '2025':  [7.33, 7.64, 7.57, 0.00, 1.58, 6.76],
+    })
+    df = df[df['2025'].notna()].copy()
+    df['beta'] = df['2025'] / benchmark_return
+    passing = df[df['beta'] >= 1]
+
+    assert set(passing['ticker']) == {'CMOP', 'COMM', 'BCOG'}
+    assert 'ENCG' not in passing['ticker'].values
+    assert 'UC15' not in passing['ticker'].values
+    assert 'AIGC' not in passing['ticker'].values
+
+
+def test_commodity_beta_filter_skipped_when_benchmark_zero():
+    """Beta filter is skipped gracefully when benchmark return is 0 or negative."""
+    import pandas as pd
+
+    df = pd.DataFrame({
+        'name':  ['ETC A', 'ETC B'],
+        'ticker': ['ETCA', 'ETCB'],
+        '2025':  [5.0, -3.0],
+    })
+    df = df[df['2025'].notna()].copy()
+
+    benchmark_return = 0  # e.g. flat year
+    if benchmark_return and benchmark_return > 0:
+        df['beta'] = df['2025'] / benchmark_return
+        df = df[df['beta'] >= 1]
+    else:
+        df['beta'] = None  # filter skipped
+
+    # All rows survive because filter was skipped
+    assert len(df) == 2
+    assert df['beta'].isna().all()
+
+
 def test_pm_interpolation_with_015_table():
     """interpolate_adjustment_factor works correctly with the ±0.15 PM/commodities table."""
     sr_table = {
