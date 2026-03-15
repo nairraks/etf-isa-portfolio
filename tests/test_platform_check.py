@@ -48,3 +48,19 @@ def test_etf_304_not_modified(mock_get):
     mock_get.return_value = mock_resp
 
     assert check_etf_availability("VEVE") is True
+
+
+@patch("etf_utils.platform_check.requests.get")
+def test_etf_no_exact_ticker_match(mock_get):
+    """API returns results but none match the requested ticker → False.
+
+    Guards against the full-text search returning an unrelated ETC whose
+    description mentions the search term (e.g. searching 'CRUD' returns
+    a broad commodities ETC with ticker 'AGCP').
+    """
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = [{"ticker": "AGCP", "title": "WisdomTree Broad Commodities"}]
+    mock_get.return_value = mock_resp
+
+    assert check_etf_availability("CRUD") is False
