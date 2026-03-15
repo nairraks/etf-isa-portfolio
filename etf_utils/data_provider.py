@@ -35,7 +35,12 @@ class DataProvider:
     def __init__(self, provider: str | None = None) -> None:
         self.provider = (provider or DATA_PROVIDER).lower()
 
-    def get_historical_prices(self, symbol: str) -> pd.DataFrame:
+    def get_historical_prices(
+        self,
+        symbol: str,
+        start_date: datetime.date | str | None = None,
+        end_date: datetime.date | str | None = None,
+    ) -> pd.DataFrame:
         """Return daily adjusted close prices for *symbol*.
 
         Returns a DataFrame with a DatetimeIndex and a single column
@@ -43,7 +48,12 @@ class DataProvider:
         """
         sym = _normalize_symbol(symbol, self.provider)
         if self.provider == "yfinance":
-            df = yf.download(sym, progress=False, auto_adjust=True)
+            kwargs = {"progress": False, "auto_adjust": True}
+            if start_date:
+                kwargs["start"] = start_date
+            if end_date:
+                kwargs["end"] = end_date
+            df = yf.download(sym, **kwargs)
             if df.empty:
                 raise ValueError(f"No data returned for symbol {sym!r}")
             close = df["Close"]
@@ -69,7 +79,12 @@ class DataProvider:
         df.index = pd.to_datetime(df.index)
         df = df.sort_index()
         df = df.rename(columns={"5. adjusted close": "close"})
-        return df[["close"]]
+        df = df[["close"]]
+        if start_date:
+            df = df[df.index >= pd.to_datetime(start_date)]
+        if end_date:
+            df = df[df.index <= pd.to_datetime(end_date)]
+        return df
 
     def get_fx_rate(self, from_ccy: str = "GBP", to_ccy: str = "EUR") -> pd.DataFrame:
         """Return daily FX rates as a DataFrame with column ``rate``."""
@@ -120,8 +135,7 @@ class DataProvider:
         end: datetime.date | str,
     ) -> float:
         """Return the total return (as a fraction) over [start, end]."""
-        df = self.get_historical_prices(symbol)
-        df = df.loc[str(start) : str(end)]
+        df = self.get_historical_prices(symbol, start_date=start, end_date=end)
         if len(df) < 2:
             warnings.warn(
                 f"Fewer than 2 price points for {symbol!r} in [{start}, {end}]",
