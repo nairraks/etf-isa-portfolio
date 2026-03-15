@@ -89,14 +89,26 @@ def test_get_asset_class_commodities():
     assert get_asset_class_from_filename('justetf_class-commodities_global.csv') == 'commodities'
 
 
-def test_four_class_weight_normalization():
-    """Normalized weights for 4 asset classes must sum to ~100."""
-    # Fixed inputs
-    eq_risk, bnd_risk, pm_risk, cmd_risk = 80, 10, 5, 5
+def test_get_asset_class_energy():
+    """Energy ETCs are split from the commodities CSV at screening time; filename suffix is 'energy'."""
+    from etf_utils.data_io import _asset_class_from_intermediate_filename
+    assert _asset_class_from_intermediate_filename('summary_energy.csv') == 'energy'
+
+
+def test_get_asset_class_agri():
+    """Agriculture ETCs are split from the commodities CSV at screening time; filename suffix is 'agri'."""
+    from etf_utils.data_io import _asset_class_from_intermediate_filename
+    assert _asset_class_from_intermediate_filename('summary_agri.csv') == 'agri'
+
+
+def test_five_class_weight_normalization():
+    """Normalized weights for 5 asset classes must sum to ~100."""
+    # Fixed inputs: 65 / 10 / 5 / 5 / 5
+    eq_risk, bnd_risk, pm_risk, energy_risk, agri_risk = 65, 10, 5, 5, 5
     # No Sharpe adjustment (factors = 1.0)
-    eq_adj, bnd_adj, pm_adj, cmd_adj = eq_risk * 1.0, bnd_risk * 1.0, pm_risk * 1.0, cmd_risk * 1.0
-    total = eq_adj + bnd_adj + pm_adj + cmd_adj
-    normalized = [round(w / total * 100, 2) for w in (eq_adj, bnd_adj, pm_adj, cmd_adj)]
+    adjs = [w * 1.0 for w in (eq_risk, bnd_risk, pm_risk, energy_risk, agri_risk)]
+    total = sum(adjs)
+    normalized = [round(w / total * 100, 2) for w in adjs]
     assert abs(sum(normalized) - 100.0) < 0.1
 
 
