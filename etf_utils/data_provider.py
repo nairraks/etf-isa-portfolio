@@ -13,8 +13,31 @@ _AV_BASE = "https://www.alphavantage.co/query"
 
 
 def _normalize_symbol(symbol: str, provider: str) -> str:
-    """Convert a bare ticker to the provider-specific format."""
+    """Convert a bare ticker to the provider-specific format.
+
+    Tickers in config files are stored without exchange suffix
+    (e.g. "VEVE"). This function appends the right suffix:
+    - yfinance: .L  (e.g. VEVE.L)
+    - alphavantage: .LON  (e.g. VEVE.LON)
+
+    If the symbol already has a suffix, it is converted to the
+    correct format for the active provider.
+    """
+    # Mapping of known exchange suffixes between providers
+    # AlphaVantage -> yfinance
+    _AV_TO_YF = {".LON": ".L", ".TRT": ".TO"}
+    # yfinance -> AlphaVantage
+    _YF_TO_AV = {v: k for k, v in _AV_TO_YF.items()}
+
     if "." in symbol:
+        if provider == "yfinance":
+            for av_suffix, yf_suffix in _AV_TO_YF.items():
+                if symbol.upper().endswith(av_suffix):
+                    return symbol[: -len(av_suffix)] + yf_suffix
+        else:
+            for yf_suffix, av_suffix in _YF_TO_AV.items():
+                if symbol.upper().endswith(yf_suffix):
+                    return symbol[: -len(yf_suffix)] + av_suffix
         return symbol
     if symbol in {"SPY", "ASHR", "EWY"}:
         return symbol
@@ -23,53 +46,25 @@ def _normalize_symbol(symbol: str, provider: str) -> str:
     return f"{symbol}.LON"
 
 
-def _sanitize_prices(df: pd.DataFrame) -> pd.DataFrame:
-    """Detect and fix 100x jumps (GBP vs GBX unit issues)."""
-    if df.empty or "close" not in df.columns:
-        return df
-
-    df = df.copy()
-    prices = df["close"].values
-    if len(prices) < 2:
-        return df
-
-    for i in range(1, len(prices)):
-        ratio = prices[i] / prices[i - 1]
-        # Detect ~100x jump (GBX to GBP or vice versa)
-        if 80 < ratio < 125:
-            # Assume previous prices were in GBP and current is GBX,
-            # or current is GBP and previous was GBX.
-            # Actually, if price[i] is ~100x price[i-1], price[i] is likely in pence.
-            # We want everything in the same units. Let's normalize to the more recent unit?
-            # No, let's normalize to the first unit seen to maintain consistency with historicals.
-            prices[i:] /= 100
-        elif 0.008 < ratio < 0.0125:
-            prices[i:] *= 100
-
-    df["close"] = prices
-    return df
-
-
 class DataProvider:
     """Unified interface for fetching ETF price and FX data."""
 
     def __init__(self, provider: str | None = None) -> None:
         self.provider = (provider or DATA_PROVIDER).lower()
+        self._price_cache: dict[str, pd.DataFrame] = {}
+        self._fx_cache: dict[str, pd.DataFrame] = {}
         self._setup_yf_cache()
 
     def _setup_yf_cache(self) -> None:
         """Handle yfinance cache initialization and bypass if corrupt."""
-        import os
         import tempfile
         from pathlib import Path
 
         try:
-            # Try to use a local project-specific cache to avoid system-wide corruption
             cache_dir = Path("data/cache/yfinance").resolve()
             cache_dir.mkdir(parents=True, exist_ok=True)
             yf.set_tz_cache_location(str(cache_dir))
-        except Exception as e:
-            # Fallback to a temporary directory if permission issues occur
+        except Exception:
             try:
                 temp_cache = Path(tempfile.gettempdir()) / "etf_yf_cache"
                 temp_cache.mkdir(parents=True, exist_ok=True)
@@ -88,6 +83,68 @@ class DataProvider:
         Returns a DataFrame with a DatetimeIndex and a single column
         ``close`` containing adjusted closing prices, sorted ascending.
         """
+        cache_key = symbol
+        if cache_key in self._price_cache:
+            cached = self._price_cache[cache_key]
+            if start_date or end_date:
+                filtered = cached.copy()
+                if start_date:
+                    filtered = filtered[filtered.index >= pd.to_datetime(start_date)]
+                if end_date:
+                    filtered = filtered[filtered.index <= pd.to_datetime(end_date)]
+                return filtered
+            return cached
+
+        # Intercept fallback tickers (e.g., IMIB) that need AlphaVantage + local caching
+        FALLBACK_TICKERS = ["IMIB"]
+        if self.provider == "yfinance" and symbol in FALLBACK_TICKERS:
+            from pathlib import Path
+
+            cache_dir = Path("data/intermediate")
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_file = cache_dir / f"av_cache_adj_{symbol}.csv"
+
+            if cache_file.exists():
+                print(f"Loading {symbol} from local AlphaVantage cache: {cache_file}")
+                df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+                result = df[["close"]]
+                self._price_cache[cache_key] = result
+                if start_date:
+                    result = result[result.index >= pd.to_datetime(start_date)]
+                if end_date:
+                    result = result[result.index <= pd.to_datetime(end_date)]
+                return result
+
+            print(f"Fetching {symbol} from AlphaVantage (API call)...")
+            av_sym = _normalize_symbol(symbol, "alphavantage")
+            params = {
+                "function": "TIME_SERIES_DAILY_ADJUSTED",
+                "symbol": av_sym,
+                "outputsize": "full",
+                "apikey": ALPHAVANTAGE_API_KEY,
+            }
+            resp = requests.get(_AV_BASE, params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json().get("Time Series (Daily)", {})
+            if not data:
+                raise ValueError(
+                    f"No AlphaVantage data for {av_sym!r}. Check API key and symbol."
+                )
+            df = pd.DataFrame.from_dict(data, orient="index", dtype=float)
+            df.index = pd.to_datetime(df.index)
+            df = df.sort_index()
+            df = df.rename(columns={"5. adjusted close": "close"})
+            result = df[["close"]]
+            result = self._normalize_pence_to_pounds(result, av_sym)
+            result.to_csv(cache_file)
+            print(f"Saved {symbol} to local cache: {cache_file}")
+            self._price_cache[cache_key] = result
+            if start_date:
+                result = result[result.index >= pd.to_datetime(start_date)]
+            if end_date:
+                result = result[result.index <= pd.to_datetime(end_date)]
+            return result
+
         if self.provider == "yfinance":
             try:
                 sym = _normalize_symbol(symbol, "yfinance")
@@ -99,6 +156,11 @@ class DataProvider:
                 if not start_date and not end_date:
                     kwargs["period"] = "max"
                 df = yf.download(sym, **kwargs)
+                # Fallback: if the normalised symbol returns nothing,
+                # retry with the bare ticker (works for US-listed ETFs like SPY).
+                if df.empty and sym != symbol:
+                    df = yf.download(symbol, **kwargs)
+                    sym = symbol
                 if df.empty:
                     raise ValueError(f"No data returned for symbol {sym!r}")
                 close = df["Close"]
@@ -107,14 +169,23 @@ class DataProvider:
                     close = close.iloc[:, 0]
                 result = close.to_frame(name="close")
                 result.index = pd.to_datetime(result.index)
+                if result.index.tz is not None:
+                    result.index = result.index.tz_localize(None)
                 result = result.sort_index()
-                return _sanitize_prices(result)
+                # Normalise GBX (pence) to GBP (pounds) for LSE tickers.
+                result = self._normalize_pence_to_pounds(result, sym)
+                if not start_date and not end_date:
+                    self._price_cache[cache_key] = result
+                return result
             except Exception as e:
-                warnings.warn(f"yfinance failed for {symbol!r} ({e}). Falling back to AlphaVantage.", stacklevel=2)
-        
-        # AlphaVantage
+                warnings.warn(
+                    f"yfinance failed for {symbol!r} ({e}). "
+                    "Falling back to AlphaVantage.",
+                    stacklevel=2,
+                )
+
+        # AlphaVantage fallback
         sym_av = _normalize_symbol(symbol, "alphavantage")
-        # AlphaVantage
         params = {
             "function": "TIME_SERIES_DAILY_ADJUSTED",
             "symbol": sym_av,
@@ -125,34 +196,82 @@ class DataProvider:
         resp.raise_for_status()
         data = resp.json().get("Time Series (Daily)", {})
         if not data:
-            raise ValueError(f"No AlphaVantage data for {sym_av!r}. Check API key and symbol.")
+            raise ValueError(
+                f"No AlphaVantage data for {sym_av!r}. Check API key and symbol."
+            )
         df = pd.DataFrame.from_dict(data, orient="index", dtype=float)
         df.index = pd.to_datetime(df.index)
         df = df.sort_index()
         df = df.rename(columns={"5. adjusted close": "close"})
-        df = df[["close"]]
+        result = df[["close"]]
+        result = self._normalize_pence_to_pounds(result, sym_av)
         if start_date:
-            df = df[df.index >= pd.to_datetime(start_date)]
+            result = result[result.index >= pd.to_datetime(start_date)]
         if end_date:
-            df = df[df.index <= pd.to_datetime(end_date)]
-        return _sanitize_prices(df)
+            result = result[result.index <= pd.to_datetime(end_date)]
+        self._price_cache[cache_key] = result
+        return result
+
+    def _normalize_pence_to_pounds(self, result: pd.DataFrame, sym: str) -> pd.DataFrame:
+        """Ensure all LSE-specific data is normalized from pence to pounds."""
+        if (sym.endswith(".L") or sym.endswith(".LON")) and len(result) > 0:
+            import numpy as np
+
+            prev_prices = result["close"].shift(1)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio = result["close"] / prev_prices
+
+            # Jumps >50x or <0.02x mark the boundaries of different reporting units
+            is_jump = (ratio > 50) | (ratio < 0.02)
+            jump_indices = list(result.index[is_jump])
+
+            # Split series into continuous chunks bounded by jumps
+            boundaries = (
+                [result.index[0]]
+                + jump_indices
+                + [result.index[-1] + pd.Timedelta(days=1)]
+            )
+
+            for i in range(len(boundaries) - 1):
+                chunk_start = boundaries[i]
+                chunk_end = boundaries[i + 1]
+
+                mask = (result.index >= chunk_start) & (result.index < chunk_end)
+                if not mask.any():
+                    continue
+
+                chunk_series = result.loc[mask, "close"]
+
+                # Iteratively divide by 100 while the median is > 500.
+                for _ in range(3):
+                    if chunk_series.median() > 500:
+                        chunk_series = chunk_series / 100
+                    else:
+                        break
+
+                result.loc[mask, "close"] = chunk_series
+        return result
 
     def get_fx_rate(self, from_ccy: str = "GBP", to_ccy: str = "EUR") -> pd.DataFrame:
         """Return daily FX rates as a DataFrame with column ``rate``."""
+        cache_key = f"{from_ccy}{to_ccy}"
+        if cache_key in self._fx_cache:
+            return self._fx_cache[cache_key]
         if self.provider == "yfinance":
-            try:
-                pair = f"{from_ccy}{to_ccy}=X"
-                df = yf.download(pair, progress=False, auto_adjust=True)
-                if df.empty:
-                    raise ValueError(f"No FX data for {pair!r}")
-                close = df["Close"]
-                if hasattr(close, "columns"):
-                    close = close.iloc[:, 0]
-                result = close.to_frame(name="rate")
-                result.index = pd.to_datetime(result.index)
-                return result.sort_index()
-            except Exception as e:
-                warnings.warn(f"yfinance failed for FX {from_ccy}/{to_ccy} ({e}). Falling back to AlphaVantage.", stacklevel=2)
+            pair = f"{from_ccy}{to_ccy}=X"
+            df = yf.download(pair, period="max", progress=False, auto_adjust=True)
+            if df.empty:
+                raise ValueError(f"No FX data for {pair!r}")
+            close = df["Close"]
+            if hasattr(close, "columns"):
+                close = close.iloc[:, 0]
+            result = close.to_frame(name="rate")
+            result.index = pd.to_datetime(result.index)
+            if result.index.tz is not None:
+                result.index = result.index.tz_localize(None)
+            result = result.sort_index()
+            self._fx_cache[cache_key] = result
+            return result
         # AlphaVantage
         params = {
             "function": "FX_DAILY",
@@ -170,7 +289,9 @@ class DataProvider:
         df.index = pd.to_datetime(df.index)
         df = df.sort_index()
         df = df.rename(columns={"4. close": "rate"})
-        return df[["rate"]]
+        result = df[["rate"]]
+        self._fx_cache[cache_key] = result
+        return result
 
     def get_latest_price(self, symbol: str) -> tuple[str, float]:
         """Return (date_string, price) for the most recent trading day."""

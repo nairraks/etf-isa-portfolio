@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A systematic DIY ETF ISA portfolio targeting 10% real annualised returns"
 requires-python = ">=3.13"
 dependencies = [
-    "jupyter-book>=1.0.0",
+    "jupyter-book>=1.0.0,<2.0.0",
     "matplotlib>=3.5.0",
     "numpy>=1.21.0",
     "pandas>=2.0.0",
