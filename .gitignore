@@ -1,0 +1,30 @@
+# Secrets — never commit
+.env
+
+# Jupyter Book build outputs
+_build/
+.jupyter_cache/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+*.egg-info/
+
+# Archive — legacy notebooks with hardcoded API keys
+archive/
+
+# Data that can be regenerated (raw scrape outputs are kept for reproducibility)
+# Output files are also kept so book can build without re-running pipeline
+data/etf_portfolio.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
