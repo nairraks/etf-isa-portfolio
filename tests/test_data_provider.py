@@ -25,7 +25,7 @@ def test_normalize_symbol_already_has_suffix():
 
 
 def test_normalize_symbol_no_suffix_various():
-    assert _normalize_symbol("SPY", "yfinance") == "SPY.L"
+    assert _normalize_symbol("SPY", "yfinance") == "SPY"
     assert _normalize_symbol("AUAD", "yfinance") == "AUAD.L"
 
 
@@ -75,12 +75,16 @@ def test_get_historical_prices_yfinance(mock_download):
     mock_download.assert_called_once_with("VEVE.L", progress=False, auto_adjust=True)
 
 
+@patch("etf_utils.data_provider.requests.get")
 @patch("etf_utils.data_provider.yf.download")
-def test_get_historical_prices_empty_raises(mock_download):
-    """Empty download should raise ValueError."""
+def test_get_historical_prices_empty_raises(mock_download, mock_get):
+    """Empty download should raise ValueError after falling back to AlphaVantage."""
     mock_download.return_value = pd.DataFrame()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {}
+    mock_get.return_value = mock_response
     provider = DataProvider(provider="yfinance")
-    with pytest.raises(ValueError, match="No data returned"):
+    with pytest.raises(ValueError, match="No AlphaVantage data for 'FAKE.LON'"):
         provider.get_historical_prices("FAKE")
 
 
