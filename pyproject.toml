@@ -1,7 +1,7 @@
 [project]
 name = "etf-isa-portfolio"
 version = "0.1.0"
-description = "A systematic DIY ETF ISA portfolio targeting 10% real annualised returns"
+description = "A systematic DIY ETF ISA portfolio using risk-adjusted ETF screening"
 requires-python = ">=3.13"
 dependencies = [
     "jupyter-book>=1.0.0,<2.0.0",
