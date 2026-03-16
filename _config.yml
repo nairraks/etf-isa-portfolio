@@ -29,6 +29,8 @@ parse:
     - tasklist
 
 sphinx:
+  extra_extensions:
+    - sphinx_design
   config:
     html_theme_options:
       navigation_with_keys: true
