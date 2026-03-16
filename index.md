@@ -103,6 +103,41 @@ Weights are then adjusted up or down based on each asset class's Sharpe ratio re
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+## Browse the Notebooks
+
+::::{grid} 2
+:gutter: 3
+
+:::{grid-item-card} 1. Data Collection
+:link: notebooks/01_data_collection
+:link-type: doc
+
+Scrape the full ETF universe from JustETF across equities, bonds, precious metals, and commodities.
+:::
+
+:::{grid-item-card} 2. ETF Screening
+:link: notebooks/02_etf_screening
+:link-type: doc
+
+Filter and rank ETFs by size, cost, beta, platform availability, and risk-adjusted returns.
+:::
+
+:::{grid-item-card} 3. Portfolio Construction
+:link: notebooks/03_portfolio_construction
+:link-type: doc
+
+Assign weights using Sharpe-ratio adjustments and build the final portfolio allocation.
+:::
+
+:::{grid-item-card} 4. Performance Tracking
+:link: notebooks/04_performance_tracking
+:link-type: doc
+
+Track YTD profit & loss and compare total return against benchmarks.
+:::
+
+::::
+
 ## Quick Start
 
 ```bash
@@ -112,17 +147,7 @@ uv sync
 cp .env.example .env  # edit if using AlphaVantage
 ```
 
-Then run notebooks in order:
-
-1. `notebooks/01_data_collection.ipynb` — scrape ETF universe from JustETF
-2. `notebooks/02_etf_screening.ipynb` — filter and rank ETFs by risk-adjusted metrics
-3. `notebooks/03_portfolio_construction.ipynb` — construct the weighted portfolio
-4. `notebooks/04_performance_tracking.ipynb` — track YTD performance vs benchmarks
-
-## Chapters
-
-```{tableofcontents}
-```
+Then run the notebooks in order (1 → 4) as described above.
 
 ---
 
