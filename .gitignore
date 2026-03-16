@@ -16,8 +16,10 @@ __pycache__/
 # Archive — legacy notebooks with hardcoded API keys
 archive/
 
-# Data that can be regenerated (raw scrape outputs are kept for reproducibility)
-# Output files are also kept so book can build without re-running pipeline
+# JustETF raw scrape outputs — do NOT commit scraped third-party data to a public repo
+data/raw/
+
+# Output files are kept so the book can build without re-running the pipeline
 
 # IDE
 .vscode/
