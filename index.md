@@ -105,12 +105,10 @@ Weights are then adjusted up or down based on each asset class's Sharpe ratio re
 
 ## Browse the Notebooks
 
-| # | Notebook | What it does |
-|---|----------|-------------|
-| 1 | [**Data Collection**](notebooks/01_data_collection.ipynb) | Scrape the full ETF universe from JustETF across equities, bonds, precious metals, and commodities |
-| 2 | [**ETF Screening**](notebooks/02_etf_screening.ipynb) | Filter and rank ETFs by size, cost, beta, platform availability, and risk-adjusted returns |
-| 3 | [**Portfolio Construction**](notebooks/03_portfolio_construction.ipynb) | Assign weights using Sharpe-ratio adjustments and build the final portfolio allocation |
-| 4 | [**Performance Tracking**](notebooks/04_performance_tracking.ipynb) | Track YTD profit & loss and compare total return against benchmarks |
+1. **{doc}`Data Collection <notebooks/01_data_collection>`** — Scrape the full ETF universe from JustETF across equities, bonds, precious metals, and commodities.
+2. **{doc}`ETF Screening <notebooks/02_etf_screening>`** — Filter and rank ETFs by size, cost, beta, platform availability, and risk-adjusted returns.
+3. **{doc}`Portfolio Construction <notebooks/03_portfolio_construction>`** — Assign weights using Sharpe-ratio adjustments and build the final portfolio allocation.
+4. **{doc}`Performance Tracking <notebooks/04_performance_tracking>`** — Track YTD profit & loss and compare total return against benchmarks.
 
 ## Quick Start
 
