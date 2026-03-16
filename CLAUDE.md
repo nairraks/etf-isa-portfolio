@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Jupyter Book documenting a systematic DIY ETF portfolio targeting 10% real annualised returns. Scrapes ETF data from JustETF, screens and ranks by risk-adjusted metrics, constructs a weighted portfolio, and tracks performance. ETFs focus on distributing (income-generating) UCITS ETFs available on InvestEngine (UK platform).
+A Jupyter Book documenting a systematic DIY ETF portfolio. Scrapes ETF data from JustETF, screens and ranks by risk-adjusted metrics, constructs a weighted portfolio, and tracks performance. ETFs focus on distributing (income-generating) UCITS ETFs available on InvestEngine (UK platform).
 
 ## Commands
 

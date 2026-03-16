@@ -1,6 +1,6 @@
 # DIY ETF ISA Portfolio Guide
 
-A practical guide to building a systematic, low-cost ETF portfolio in a UK ISA account, targeting 10% real annualised returns.
+A practical guide to building a systematic, low-cost ETF portfolio in a UK ISA account.
 
 ## What This Is
 
@@ -99,7 +99,7 @@ Weights are then adjusted up or down based on each asset class's Sharpe ratio re
 │  • Compare total return vs. benchmark (VEVE)                                │
 │  • Track cumulative return since portfolio start                             │
 │                                                                              │
-│  Goal: 10% real (inflation-adjusted) annualised return                      │
+│  Monitor: track total return vs. benchmarks over time                       │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -126,4 +126,13 @@ Then run notebooks in order:
 
 ---
 
-> **Disclaimer**: This is personal research, not financial advice. Past performance does not guarantee future results. Always do your own due diligence before investing.
+```{admonition} Disclaimer
+:class: danger
+
+**This is NOT investment advice.** The content in this book is for educational and personal research purposes only. The author is not a financial adviser and nothing here constitutes a recommendation to buy, sell, or hold any security.
+
+- **You can lose money investing in financial markets.** The value of investments and the income from them can go down as well as up.
+- **Past performance does not guarantee future results.** Historical returns shown in this book are no indication of what you will earn.
+- **Do your own research.** Always consult a qualified, regulated financial adviser before making investment decisions.
+- **The author accepts no liability** for any losses arising from the use of information in this book.
+```
