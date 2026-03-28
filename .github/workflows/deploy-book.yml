@@ -33,7 +33,9 @@ jobs:
         run: uv run pytest tests/ -v
 
       - name: Build the book
-        run: uv run jupyter-book build .
+        run: |
+          uv run jupyter-book build .
+          touch ./_build/html/.nojekyll
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
