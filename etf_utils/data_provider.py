@@ -152,7 +152,10 @@ class DataProvider:
                 if start_date:
                     kwargs["start"] = start_date
                 if end_date:
-                    kwargs["end"] = end_date
+                    # yfinance treats end as exclusive; add 1 day so the
+                    # requested end_date is included in the result.
+                    end_dt = pd.to_datetime(end_date) + pd.Timedelta(days=1)
+                    kwargs["end"] = end_dt.strftime("%Y-%m-%d")
                 if not start_date and not end_date:
                     kwargs["period"] = "max"
                 df = yf.download(sym, **kwargs)
@@ -232,6 +235,7 @@ class DataProvider:
                 + [result.index[-1] + pd.Timedelta(days=1)]
             )
 
+            chunks = []
             for i in range(len(boundaries) - 1):
                 chunk_start = boundaries[i]
                 chunk_end = boundaries[i + 1]
@@ -240,15 +244,34 @@ class DataProvider:
                 if not mask.any():
                     continue
 
-                chunk_series = result.loc[mask, "close"]
+                chunk_median = result.loc[mask, "close"].median()
+                chunks.append((mask, chunk_median))
 
-                # Iteratively divide by 100 while the median is > 500.
+            if len(chunks) > 1:
+                # Multiple chunks: compare medians to detect mixed GBX/GBP.
+                # The smallest median is assumed to be in GBP; chunks whose
+                # median is ~100x larger are in GBX and need dividing.
+                min_median = min(c[1] for c in chunks)
+                for mask, chunk_median in chunks:
+                    chunk_series = result.loc[mask, "close"]
+                    for _ in range(3):
+                        if chunk_median / max(min_median, 1e-9) > 50:
+                            chunk_series = chunk_series / 100
+                            chunk_median = chunk_series.median()
+                        else:
+                            break
+                    result.loc[mask, "close"] = chunk_series
+            elif chunks:
+                # Single chunk (no mixed-unit jumps): keep the conservative
+                # threshold of 500.  pct_change() is scale-invariant so
+                # returns/volatility are correct regardless of GBX vs GBP.
+                mask = chunks[0][0]
+                chunk_series = result.loc[mask, "close"]
                 for _ in range(3):
                     if chunk_series.median() > 500:
                         chunk_series = chunk_series / 100
                     else:
                         break
-
                 result.loc[mask, "close"] = chunk_series
         return result
 
