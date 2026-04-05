@@ -8,10 +8,12 @@ from etf_utils.database import (
     PortfolioLockedError,
     init_db,
     list_portfolio_versions,
+    load_benchmark_etfs,
     load_portfolio,
     load_raw_etf_data,
     load_screened_etfs,
     lock_portfolio,
+    save_benchmark_etfs,
     save_portfolio,
     save_raw_etf_data,
     save_screened_etfs,
@@ -127,6 +129,33 @@ def test_load_screened_etfs_all_asset_classes(sample_screened_df):
     save_screened_etfs(bonds_df, "bonds", portfolio_year=2026)
     result = load_screened_etfs(portfolio_year=2026)
     assert len(result) == len(sample_screened_df) * 2
+
+
+# ---------------------------------------------------------------------------
+# benchmark_etfs
+# ---------------------------------------------------------------------------
+
+def test_save_and_load_benchmark_etfs():
+    """save_benchmark_etfs + load_benchmark_etfs round-trip."""
+    df = pd.DataFrame({
+        "ticker": ["VEVE", "IWDG"],
+        "beta": [1.1, 0.9],
+        "asset_class": ["equity", "equity"],
+    })
+    save_benchmark_etfs(df, asset_class="equity", portfolio_year=2026)
+    result = load_benchmark_etfs(asset_class="equity", portfolio_year=2026)
+    assert len(result) == 2
+    assert set(result["ticker"]) == {"VEVE", "IWDG"}
+
+
+def test_benchmark_etfs_isolated_by_year():
+    """Different years do not bleed into each other."""
+    df26 = pd.DataFrame({"ticker": ["A"], "beta": [1.2], "asset_class": ["equity"]})
+    df25 = pd.DataFrame({"ticker": ["B"], "beta": [0.8], "asset_class": ["equity"]})
+    save_benchmark_etfs(df26, asset_class="equity", portfolio_year=2026)
+    save_benchmark_etfs(df25, asset_class="equity", portfolio_year=2025)
+    assert load_benchmark_etfs("equity", 2026)["ticker"].iloc[0] == "A"
+    assert load_benchmark_etfs("equity", 2025)["ticker"].iloc[0] == "B"
 
 
 # ---------------------------------------------------------------------------
