@@ -168,3 +168,68 @@ def test_gbp_series_not_normalised(mock_download):
     assert result["close"].iloc[0] == pytest.approx(12.0, rel=0.01)
     assert result["close"].iloc[-1] == pytest.approx(12.4, rel=0.01)
 
+
+@patch("etf_utils.data_provider.yf.download")
+def test_gbx_low_pence_single_chunk_not_normalised(mock_download):
+    """Single-chunk series at 100-110 GBX is NOT normalised (pct_change is scale-invariant)."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    mock_df = pd.DataFrame(
+        {"Close": [105.0, 105.5, 106.0, 105.8, 106.2]}, index=dates
+    )
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    result = provider.get_historical_prices("SAAA")  # Will use SAAA.L
+
+    # Single chunk below 500 threshold — not normalised (returns/vol still correct)
+    assert result["close"].iloc[0] == pytest.approx(105.0, rel=0.01)
+    assert result["close"].iloc[-1] == pytest.approx(106.2, rel=0.01)
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_gbx_mixed_units_low_range(mock_download):
+    """Series that switches from GBP to GBX mid-series should normalise the GBX chunk."""
+    dates = pd.bdate_range("2024-01-02", periods=10)
+    # First 5 days in GBP (~1.05), then jumps to GBX (~105)
+    prices = [1.05, 1.06, 1.04, 1.05, 1.06, 105.0, 106.0, 104.5, 105.5, 106.0]
+    mock_df = pd.DataFrame({"Close": prices}, index=dates)
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    result = provider.get_historical_prices("SAAA")
+
+    # All values should be in GBP range (~1.0-1.1)
+    assert result["close"].max() < 2.0
+    assert result["close"].min() > 0.5
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_gbp_moderate_price_not_normalised(mock_download):
+    """ETF at ~50 GBP should NOT be divided by 100."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    mock_df = pd.DataFrame(
+        {"Close": [50.0, 50.5, 51.0, 50.8, 51.2]}, index=dates
+    )
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    result = provider.get_historical_prices("VEVE")
+
+    assert result["close"].iloc[0] == pytest.approx(50.0, rel=0.01)
+    assert result["close"].iloc[-1] == pytest.approx(51.2, rel=0.01)
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_end_date_inclusive_for_yfinance(mock_download):
+    """end_date should be adjusted +1 day when passed to yf.download."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    mock_df = pd.DataFrame({"Close": [100, 101, 102, 103, 104]}, index=dates)
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    provider.get_historical_prices("VEVE", start_date="2024-01-02", end_date="2024-01-08")
+
+    call_kwargs = mock_download.call_args[1]
+    # yfinance should receive end="2024-01-09" (one day after requested end)
+    assert call_kwargs["end"] == "2024-01-09"
+
