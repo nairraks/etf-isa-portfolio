@@ -11,11 +11,13 @@ from etf_utils.database import (
     load_benchmark_etfs,
     load_portfolio,
     load_raw_etf_data,
+    load_rebalancing_trades,
     load_screened_etfs,
     lock_portfolio,
     save_benchmark_etfs,
     save_portfolio,
     save_raw_etf_data,
+    save_rebalancing_trades,
     save_screened_etfs,
     seed_2025_portfolio,
 )
@@ -156,6 +158,47 @@ def test_benchmark_etfs_isolated_by_year():
     save_benchmark_etfs(df25, asset_class="equity", portfolio_year=2025)
     assert load_benchmark_etfs("equity", 2026)["ticker"].iloc[0] == "A"
     assert load_benchmark_etfs("equity", 2025)["ticker"].iloc[0] == "B"
+
+
+# ---------------------------------------------------------------------------
+# rebalancing_trades
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def sample_trades_df():
+    return pd.DataFrame({
+        "security": ["Vanguard FTSE (ISIN IE00B1W57M07)", "iShares Corp Bond (ISIN IE00B00FV011)"],
+        "type": ["Buy", "Sell"],
+        "quantity": [100.0, 50.0],
+        "price": [45.50, 112.30],
+        "value": [4550.0, 5615.0],
+        "trade_datetime": ["15/06/25 10:30:00", "15/06/25 10:31:00"],
+        "settlement_date": ["17/06/25", "17/06/25"],
+        "broker": ["InvestEngine", "InvestEngine"],
+        "isin": ["IE00B1W57M07", "IE00B00FV011"],
+        "ticker": ["VEVE", "SLXX"],
+        "trade_date": ["2025-06-15", "2025-06-15"],
+        "signed_qty": [100.0, -50.0],
+        "signed_value": [4550.0, -5615.0],
+    })
+
+
+def test_save_and_load_rebalancing_trades(sample_trades_df):
+    """save_rebalancing_trades + load_rebalancing_trades round-trip."""
+    save_rebalancing_trades(sample_trades_df, portfolio_year=2025)
+    result = load_rebalancing_trades(portfolio_year=2025)
+    assert len(result) == 2
+    assert set(result["ticker"]) == {"VEVE", "SLXX"}
+    assert "portfolio_year" not in result.columns
+    assert "saved_at" not in result.columns
+
+
+def test_rebalancing_trades_isolated_by_year(sample_trades_df):
+    """Different years do not bleed into each other."""
+    save_rebalancing_trades(sample_trades_df, portfolio_year=2025)
+    save_rebalancing_trades(sample_trades_df.head(1), portfolio_year=2026)
+    assert len(load_rebalancing_trades(portfolio_year=2025)) == 2
+    assert len(load_rebalancing_trades(portfolio_year=2026)) == 1
 
 
 # ---------------------------------------------------------------------------
