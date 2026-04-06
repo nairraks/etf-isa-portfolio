@@ -16,9 +16,10 @@ __pycache__/
 # Archive — legacy notebooks with hardcoded API keys
 archive/
 
-# Data that can be regenerated (raw scrape outputs are kept for reproducibility)
-# Output files are also kept so book can build without re-running pipeline
-data/etf_portfolio.db
+# Intermediate/output CSVs — DB is authoritative (commit DB after pipeline runs)
+data/raw/*.csv
+data/intermediate/*.csv
+data/output/final_portfolio.csv
 
 # IDE
 .vscode/
@@ -28,6 +29,15 @@ data/etf_portfolio.db
 # OS
 .DS_Store
 Thumbs.db
- 
- # Gemini/AI local knowledge
- .gemini/
+
+# Gemini/AI local knowledge
+.gemini/
+.claude/
+
+# Temporary and Cache Directories
+tmp/
+data/cache/
+notebooks/data/
+
+# Backup Files
+*.bak
