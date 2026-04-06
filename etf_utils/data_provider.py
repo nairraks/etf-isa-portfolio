@@ -337,7 +337,11 @@ class DataProvider:
         Returns ``float("nan")`` if the symbol has no data (e.g. delisted).
         """
         try:
-            df = self.get_historical_prices(symbol, start_date=start, end_date=end)
+            # Expand backwards slightly so we can anchor the base price safely to
+            # the last officially closed trading day immediately preceding or exactly on `start`.
+            start_dt = pd.to_datetime(start)
+            query_start = (start_dt - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
+            df = self.get_historical_prices(symbol, start_date=query_start, end_date=end)
         except ValueError as exc:
             warnings.warn(
                 f"Could not fetch data for {symbol!r}: {exc}",
@@ -350,6 +354,13 @@ class DataProvider:
                 stacklevel=2,
             )
             return float("nan")
-        start_price = df["close"].iloc[0]
+        
+        # Base price: last available close <= start_date
+        base_df = df[df.index <= start_dt]
+        if base_df.empty:
+            start_price = df["close"].iloc[0]
+        else:
+            start_price = base_df["close"].iloc[-1]
+            
         end_price = df["close"].iloc[-1]
         return (end_price - start_price) / start_price
