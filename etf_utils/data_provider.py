@@ -1,6 +1,7 @@
 """Unified data provider: yfinance (default) or AlphaVantage."""
 
 import datetime
+import json
 import warnings
 
 import pandas as pd
@@ -53,7 +54,19 @@ class DataProvider:
         self.provider = (provider or DATA_PROVIDER).lower()
         self._price_cache: dict[str, pd.DataFrame] = {}
         self._fx_cache: dict[str, pd.DataFrame] = {}
+        self._currency_units = self._load_currency_units()
         self._setup_yf_cache()
+
+    @staticmethod
+    def _load_currency_units() -> dict:
+        """Load explicit GBX/GBP mappings from data/config/currency_units.json."""
+        from .config import DATA_CONFIG
+
+        path = DATA_CONFIG / "currency_units.json"
+        if path.exists():
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        return {}
 
     def _setup_yf_cache(self) -> None:
         """Handle yfinance cache initialization and bypass if corrupt."""
@@ -152,7 +165,10 @@ class DataProvider:
                 if start_date:
                     kwargs["start"] = start_date
                 if end_date:
-                    kwargs["end"] = end_date
+                    # yfinance treats end as exclusive; add 1 day so the
+                    # requested end_date is included in the result.
+                    end_dt = pd.to_datetime(end_date) + pd.Timedelta(days=1)
+                    kwargs["end"] = end_dt.strftime("%Y-%m-%d")
                 if not start_date and not end_date:
                     kwargs["period"] = "max"
                 df = yf.download(sym, **kwargs)
@@ -213,43 +229,81 @@ class DataProvider:
         return result
 
     def _normalize_pence_to_pounds(self, result: pd.DataFrame, sym: str) -> pd.DataFrame:
-        """Ensure all LSE-specific data is normalized from pence to pounds."""
-        if (sym.endswith(".L") or sym.endswith(".LON")) and len(result) > 0:
-            import numpy as np
+        """Ensure all LSE-specific data is normalized from pence to pounds.
 
-            prev_prices = result["close"].shift(1)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                ratio = result["close"] / prev_prices
+        Primary: uses the explicit mapping in data/config/currency_units.json.
+        Fallback: heuristic median-based detection with a warning for unknown tickers.
+        """
+        if not (sym.endswith(".L") or sym.endswith(".LON")) or len(result) == 0:
+            return result
 
-            # Jumps >50x or <0.02x mark the boundaries of different reporting units
-            is_jump = (ratio > 50) | (ratio < 0.02)
-            jump_indices = list(result.index[is_jump])
+        # Extract bare ticker (e.g. "AUAD.L" -> "AUAD")
+        bare = sym.split(".")[0]
 
-            # Split series into continuous chunks bounded by jumps
-            boundaries = (
-                [result.index[0]]
-                + jump_indices
-                + [result.index[-1] + pd.Timedelta(days=1)]
-            )
+        # --- Primary: explicit config lookup ---
+        provider_units = self._currency_units.get(self.provider, {})
+        unit = provider_units.get(bare)
 
-            for i in range(len(boundaries) - 1):
-                chunk_start = boundaries[i]
-                chunk_end = boundaries[i + 1]
+        if unit is not None:
+            if unit.upper() == "GBX":
+                result = result.copy()
+                result["close"] = result["close"] / 100
+            # GBP -> no change needed
+            return result
 
-                mask = (result.index >= chunk_start) & (result.index < chunk_end)
-                if not mask.any():
-                    continue
+        # --- Fallback: heuristic for unknown tickers ---
+        warnings.warn(
+            f"Ticker {bare!r} not found in currency_units.json. "
+            f"Falling back to heuristic pence detection. "
+            f"Please add an entry for this ticker.",
+            stacklevel=3,
+        )
 
+        import numpy as np
+
+        prev_prices = result["close"].shift(1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = result["close"] / prev_prices
+
+        is_jump = (ratio > 50) | (ratio < 0.02)
+        jump_indices = list(result.index[is_jump])
+
+        boundaries = (
+            [result.index[0]]
+            + jump_indices
+            + [result.index[-1] + pd.Timedelta(days=1)]
+        )
+
+        chunks = []
+        for i in range(len(boundaries) - 1):
+            chunk_start = boundaries[i]
+            chunk_end = boundaries[i + 1]
+            mask = (result.index >= chunk_start) & (result.index < chunk_end)
+            if not mask.any():
+                continue
+            chunk_median = result.loc[mask, "close"].median()
+            chunks.append((mask, chunk_median))
+
+        if len(chunks) > 1:
+            min_median = min(c[1] for c in chunks)
+            for mask, chunk_median in chunks:
                 chunk_series = result.loc[mask, "close"]
-
-                # Iteratively divide by 100 while the median is > 500.
                 for _ in range(3):
-                    if chunk_series.median() > 500:
+                    if chunk_median / max(min_median, 1e-9) > 50:
                         chunk_series = chunk_series / 100
+                        chunk_median = chunk_series.median()
                     else:
                         break
-
                 result.loc[mask, "close"] = chunk_series
+        elif chunks:
+            mask = chunks[0][0]
+            chunk_series = result.loc[mask, "close"]
+            for _ in range(3):
+                if chunk_series.median() > 500:
+                    chunk_series = chunk_series / 100
+                else:
+                    break
+            result.loc[mask, "close"] = chunk_series
         return result
 
     def get_fx_rate(self, from_ccy: str = "GBP", to_ccy: str = "EUR") -> pd.DataFrame:
@@ -314,7 +368,11 @@ class DataProvider:
         Returns ``float("nan")`` if the symbol has no data (e.g. delisted).
         """
         try:
-            df = self.get_historical_prices(symbol, start_date=start, end_date=end)
+            # Expand backwards slightly so we can anchor the base price safely to
+            # the last officially closed trading day immediately preceding or exactly on `start`.
+            start_dt = pd.to_datetime(start)
+            query_start = (start_dt - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
+            df = self.get_historical_prices(symbol, start_date=query_start, end_date=end)
         except ValueError as exc:
             warnings.warn(
                 f"Could not fetch data for {symbol!r}: {exc}",
@@ -327,6 +385,13 @@ class DataProvider:
                 stacklevel=2,
             )
             return float("nan")
-        start_price = df["close"].iloc[0]
+        
+        # Base price: last available close <= start_date
+        base_df = df[df.index <= start_dt]
+        if base_df.empty:
+            start_price = df["close"].iloc[0]
+        else:
+            start_price = base_df["close"].iloc[-1]
+            
         end_price = df["close"].iloc[-1]
         return (end_price - start_price) / start_price
