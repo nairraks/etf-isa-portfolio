@@ -2,7 +2,19 @@ title: DIY ETF ISA Portfolio Guide
 author: nairraks
 copyright: "2025"
 logo: ""
-exclude_patterns: [README.md, "archive/**"]
+exclude_patterns:
+  - README.md
+  - CLAUDE.md
+  - "archive/**"
+  - ".venv/**"
+  - ".pytest_cache/**"
+  - "tests/**"
+  - "etf_utils/**"
+  - "data/**"
+  - "_build/**"
+  - ".git/**"
+  - ".github/**"
+  - ".env*"
 
 # Off during refactoring — switch to "cache" once pipeline is stable
 execute:
@@ -29,8 +41,6 @@ parse:
     - tasklist
 
 sphinx:
-  extra_extensions:
-    - sphinx_design
   config:
     html_theme_options:
       navigation_with_keys: true
