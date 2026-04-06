@@ -14,6 +14,17 @@ class Backtester:
         self.end_date = pd.Timestamp(end_date).normalize() if end_date else pd.Timestamp.now().normalize()
         self.all_dates = pd.bdate_range(self.start_date, self.end_date)
 
+    @property
+    def price_df(self):
+        """
+        Returns a single combined DataFrame of 'close' prices for all tickers.
+        Index = date, Columns = tickers.
+        """
+        if not hasattr(self, "_price_df_cache"):
+            series_dict = {ticker: df["close"] for ticker, df in self.price_data.items() if "close" in df.columns}
+            self._price_df_cache = pd.DataFrame(series_dict)
+        return self._price_df_cache
+
     def get_price(self, ticker, date):
         if ticker not in self.price_data:
             return None
