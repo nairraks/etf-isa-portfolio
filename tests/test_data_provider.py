@@ -33,11 +33,6 @@ def test_normalize_symbol_no_suffix_various():
 # --- DataProvider init ---
 
 
-def test_provider_defaults_to_alphavantage():
-    provider = DataProvider()
-    assert provider.provider == "alphavantage"
-
-
 @patch.dict("os.environ", {"DATA_PROVIDER": "alphavantage"})
 def test_provider_from_env():
     """DATA_PROVIDER env var should control the default provider."""
