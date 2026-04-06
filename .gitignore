@@ -16,9 +16,9 @@ __pycache__/
 # Archive — legacy notebooks with hardcoded API keys
 archive/
 
-# Data that can be regenerated (raw scrape outputs are kept for reproducibility)
-# Output files are also kept so book can build without re-running pipeline
-data/etf_portfolio.db
+# Intermediate/output CSVs — DB is authoritative (commit DB after pipeline runs)
+data/intermediate/*.csv
+data/output/final_portfolio.csv
 
 # IDE
 .vscode/
