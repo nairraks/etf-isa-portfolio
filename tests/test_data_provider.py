@@ -1,5 +1,6 @@
-"""Tests for etf_utils.data_provider — DataProvider and symbol normalization."""
+"""Tests for etf_utils.data_provider -- DataProvider and symbol normalization."""
 
+import json
 import pandas as pd
 import pytest
 from unittest.mock import patch, MagicMock
@@ -32,9 +33,9 @@ def test_normalize_symbol_no_suffix_various():
 # --- DataProvider init ---
 
 
-def test_provider_defaults_to_yfinance():
+def test_provider_defaults_to_alphavantage():
     provider = DataProvider()
-    assert provider.provider == "yfinance"
+    assert provider.provider == "alphavantage"
 
 
 @patch.dict("os.environ", {"DATA_PROVIDER": "alphavantage"})
@@ -141,14 +142,15 @@ def test_benchmark_period_return(mock_download):
 
 @patch("etf_utils.data_provider.yf.download")
 def test_gbx_whole_series_normalised_to_gbp(mock_download):
-    """Series entirely in GBX (pence) should be divided by 100."""
+    """Series entirely in GBX (pence) should be divided by 100 via explicit mapping."""
     dates = pd.bdate_range("2024-01-02", periods=5)
     # Prices in pence (~1800 GBX = £18 GBP)
     mock_df = pd.DataFrame({"Close": [1800.0, 1810.0, 1820.0, 1830.0, 1840.0]}, index=dates)
     mock_download.return_value = mock_df
 
     provider = DataProvider(provider="yfinance")
-    result = provider.get_historical_prices("AUAD")  # Will use AUAD.L
+    # AUAD is mapped as GBX in currency_units.json
+    result = provider.get_historical_prices("AUAD")
 
     # Should be normalised to GBP
     assert result["close"].iloc[0] == pytest.approx(18.0, rel=0.01)
@@ -170,8 +172,8 @@ def test_gbp_series_not_normalised(mock_download):
 
 
 @patch("etf_utils.data_provider.yf.download")
-def test_gbx_low_pence_single_chunk_not_normalised(mock_download):
-    """Single-chunk series at 100-110 GBX is NOT normalised (pct_change is scale-invariant)."""
+def test_gbx_saaa_normalised_to_gbp(mock_download):
+    """SAAA is mapped as GBX -- prices in pence should be divided by 100."""
     dates = pd.bdate_range("2024-01-02", periods=5)
     mock_df = pd.DataFrame(
         {"Close": [105.0, 105.5, 106.0, 105.8, 106.2]}, index=dates
@@ -179,16 +181,16 @@ def test_gbx_low_pence_single_chunk_not_normalised(mock_download):
     mock_download.return_value = mock_df
 
     provider = DataProvider(provider="yfinance")
-    result = provider.get_historical_prices("SAAA")  # Will use SAAA.L
+    result = provider.get_historical_prices("SAAA")
 
-    # Single chunk below 500 threshold — not normalised (returns/vol still correct)
-    assert result["close"].iloc[0] == pytest.approx(105.0, rel=0.01)
-    assert result["close"].iloc[-1] == pytest.approx(106.2, rel=0.01)
+    # SAAA is GBX, so 105 pence -> 1.05 GBP
+    assert result["close"].iloc[0] == pytest.approx(1.05, rel=0.01)
+    assert result["close"].iloc[-1] == pytest.approx(1.062, rel=0.01)
 
 
 @patch("etf_utils.data_provider.yf.download")
 def test_gbx_mixed_units_low_range(mock_download):
-    """Series that switches from GBP to GBX mid-series should normalise the GBX chunk."""
+    """Series that switches from GBP to GBX mid-series should normalise the GBX chunk (heuristic fallback)."""
     dates = pd.bdate_range("2024-01-02", periods=10)
     # First 5 days in GBP (~1.05), then jumps to GBX (~105)
     prices = [1.05, 1.06, 1.04, 1.05, 1.06, 105.0, 106.0, 104.5, 105.5, 106.0]
@@ -196,7 +198,9 @@ def test_gbx_mixed_units_low_range(mock_download):
     mock_download.return_value = mock_df
 
     provider = DataProvider(provider="yfinance")
-    result = provider.get_historical_prices("SAAA")
+    # Use unknown ticker to exercise heuristic fallback
+    with pytest.warns(UserWarning, match="not found in currency_units.json"):
+        result = provider.get_historical_prices("ZZMIX")
 
     # All values should be in GBP range (~1.0-1.1)
     assert result["close"].max() < 2.0
@@ -232,4 +236,37 @@ def test_end_date_inclusive_for_yfinance(mock_download):
     call_kwargs = mock_download.call_args[1]
     # yfinance should receive end="2024-01-09" (one day after requested end)
     assert call_kwargs["end"] == "2024-01-09"
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_hmch_gbx_normalised(mock_download):
+    """HMCH is mapped as GBX -- prices around 500 pence should become ~5 GBP."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    mock_df = pd.DataFrame(
+        {"Close": [550.0, 556.0, 560.0, 558.0, 579.0]}, index=dates
+    )
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    result = provider.get_historical_prices("HMCH")
+
+    assert result["close"].iloc[0] == pytest.approx(5.50, rel=0.01)
+    assert result["close"].iloc[-1] == pytest.approx(5.79, rel=0.01)
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_unknown_ticker_falls_back_to_heuristic(mock_download):
+    """Ticker not in currency_units.json should trigger a warning and use heuristic."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    mock_df = pd.DataFrame(
+        {"Close": [1200.0, 1210.0, 1220.0, 1215.0, 1230.0]}, index=dates
+    )
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    with pytest.warns(UserWarning, match="not found in currency_units.json"):
+        result = provider.get_historical_prices("ZZZNEW")
+
+    # Heuristic: median 1215 > 500, so should be divided by 100
+    assert result["close"].iloc[0] == pytest.approx(12.0, rel=0.01)
 
