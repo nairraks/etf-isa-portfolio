@@ -1,6 +1,7 @@
 """Unified data provider: yfinance (default) or AlphaVantage."""
 
 import datetime
+import json
 import warnings
 
 import pandas as pd
@@ -53,7 +54,19 @@ class DataProvider:
         self.provider = (provider or DATA_PROVIDER).lower()
         self._price_cache: dict[str, pd.DataFrame] = {}
         self._fx_cache: dict[str, pd.DataFrame] = {}
+        self._currency_units = self._load_currency_units()
         self._setup_yf_cache()
+
+    @staticmethod
+    def _load_currency_units() -> dict:
+        """Load explicit GBX/GBP mappings from data/config/currency_units.json."""
+        from .config import DATA_CONFIG
+
+        path = DATA_CONFIG / "currency_units.json"
+        if path.exists():
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+        return {}
 
     def _setup_yf_cache(self) -> None:
         """Handle yfinance cache initialization and bypass if corrupt."""
@@ -216,63 +229,81 @@ class DataProvider:
         return result
 
     def _normalize_pence_to_pounds(self, result: pd.DataFrame, sym: str) -> pd.DataFrame:
-        """Ensure all LSE-specific data is normalized from pence to pounds."""
-        if (sym.endswith(".L") or sym.endswith(".LON")) and len(result) > 0:
-            import numpy as np
+        """Ensure all LSE-specific data is normalized from pence to pounds.
 
-            prev_prices = result["close"].shift(1)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                ratio = result["close"] / prev_prices
+        Primary: uses the explicit mapping in data/config/currency_units.json.
+        Fallback: heuristic median-based detection with a warning for unknown tickers.
+        """
+        if not (sym.endswith(".L") or sym.endswith(".LON")) or len(result) == 0:
+            return result
 
-            # Jumps >50x or <0.02x mark the boundaries of different reporting units
-            is_jump = (ratio > 50) | (ratio < 0.02)
-            jump_indices = list(result.index[is_jump])
+        # Extract bare ticker (e.g. "AUAD.L" -> "AUAD")
+        bare = sym.split(".")[0]
 
-            # Split series into continuous chunks bounded by jumps
-            boundaries = (
-                [result.index[0]]
-                + jump_indices
-                + [result.index[-1] + pd.Timedelta(days=1)]
-            )
+        # --- Primary: explicit config lookup ---
+        provider_units = self._currency_units.get(self.provider, {})
+        unit = provider_units.get(bare)
 
-            chunks = []
-            for i in range(len(boundaries) - 1):
-                chunk_start = boundaries[i]
-                chunk_end = boundaries[i + 1]
+        if unit is not None:
+            if unit.upper() == "GBX":
+                result = result.copy()
+                result["close"] = result["close"] / 100
+            # GBP -> no change needed
+            return result
 
-                mask = (result.index >= chunk_start) & (result.index < chunk_end)
-                if not mask.any():
-                    continue
+        # --- Fallback: heuristic for unknown tickers ---
+        warnings.warn(
+            f"Ticker {bare!r} not found in currency_units.json. "
+            f"Falling back to heuristic pence detection. "
+            f"Please add an entry for this ticker.",
+            stacklevel=3,
+        )
 
-                chunk_median = result.loc[mask, "close"].median()
-                chunks.append((mask, chunk_median))
+        import numpy as np
 
-            if len(chunks) > 1:
-                # Multiple chunks: compare medians to detect mixed GBX/GBP.
-                # The smallest median is assumed to be in GBP; chunks whose
-                # median is ~100x larger are in GBX and need dividing.
-                min_median = min(c[1] for c in chunks)
-                for mask, chunk_median in chunks:
-                    chunk_series = result.loc[mask, "close"]
-                    for _ in range(3):
-                        if chunk_median / max(min_median, 1e-9) > 50:
-                            chunk_series = chunk_series / 100
-                            chunk_median = chunk_series.median()
-                        else:
-                            break
-                    result.loc[mask, "close"] = chunk_series
-            elif chunks:
-                # Single chunk (no mixed-unit jumps): keep the conservative
-                # threshold of 500.  pct_change() is scale-invariant so
-                # returns/volatility are correct regardless of GBX vs GBP.
-                mask = chunks[0][0]
+        prev_prices = result["close"].shift(1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = result["close"] / prev_prices
+
+        is_jump = (ratio > 50) | (ratio < 0.02)
+        jump_indices = list(result.index[is_jump])
+
+        boundaries = (
+            [result.index[0]]
+            + jump_indices
+            + [result.index[-1] + pd.Timedelta(days=1)]
+        )
+
+        chunks = []
+        for i in range(len(boundaries) - 1):
+            chunk_start = boundaries[i]
+            chunk_end = boundaries[i + 1]
+            mask = (result.index >= chunk_start) & (result.index < chunk_end)
+            if not mask.any():
+                continue
+            chunk_median = result.loc[mask, "close"].median()
+            chunks.append((mask, chunk_median))
+
+        if len(chunks) > 1:
+            min_median = min(c[1] for c in chunks)
+            for mask, chunk_median in chunks:
                 chunk_series = result.loc[mask, "close"]
                 for _ in range(3):
-                    if chunk_series.median() > 500:
+                    if chunk_median / max(min_median, 1e-9) > 50:
                         chunk_series = chunk_series / 100
+                        chunk_median = chunk_series.median()
                     else:
                         break
                 result.loc[mask, "close"] = chunk_series
+        elif chunks:
+            mask = chunks[0][0]
+            chunk_series = result.loc[mask, "close"]
+            for _ in range(3):
+                if chunk_series.median() > 500:
+                    chunk_series = chunk_series / 100
+                else:
+                    break
+            result.loc[mask, "close"] = chunk_series
         return result
 
     def get_fx_rate(self, from_ccy: str = "GBP", to_ccy: str = "EUR") -> pd.DataFrame:
