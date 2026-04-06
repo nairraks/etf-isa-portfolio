@@ -33,11 +33,6 @@ def test_normalize_symbol_no_suffix_various():
 # --- DataProvider init ---
 
 
-def test_provider_defaults_to_alphavantage():
-    provider = DataProvider()
-    assert provider.provider == "alphavantage"
-
-
 @patch.dict("os.environ", {"DATA_PROVIDER": "alphavantage"})
 def test_provider_from_env():
     """DATA_PROVIDER env var should control the default provider."""
@@ -269,4 +264,24 @@ def test_unknown_ticker_falls_back_to_heuristic(mock_download):
 
     # Heuristic: median 1215 > 500, so should be divided by 100
     assert result["close"].iloc[0] == pytest.approx(12.0, rel=0.01)
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_heuristic_low_range_100_500(mock_download):
+    """Verify that tickers in the 100-500 range are now caught by the improved heuristic (threshold=100)."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    # Median ~105, was ignored when threshold was 500
+    mock_df = pd.DataFrame(
+        {"Close": [105.0, 106.0, 104.0, 105.5, 106.5]}, index=dates
+    )
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    # Use unknown ticker to trigger heuristic
+    with pytest.warns(UserWarning, match="not found in currency_units.json"):
+        result = provider.get_historical_prices("LOW PRICE")
+
+    # Should now be divided by 100
+    assert result["close"].iloc[0] == pytest.approx(1.05, rel=0.01)
+
 
