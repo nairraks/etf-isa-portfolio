@@ -238,11 +238,14 @@ class DataProvider:
             return result
 
         # Extract bare ticker (e.g. "AUAD.L" -> "AUAD")
-        bare = sym.split(".")[0]
+        sym = sym.strip()
+        bare = sym.split(".")[0].upper()
 
         # --- Primary: explicit config lookup ---
         provider_units = self._currency_units.get(self.provider, {})
-        unit = provider_units.get(bare)
+        # Normalize keys in provider_units for case-insensitive lookup
+        provider_units_upper = {k.upper(): v for k, v in provider_units.items()}
+        unit = provider_units_upper.get(bare)
 
         if unit is not None:
             if unit.upper() == "GBX":
@@ -253,9 +256,8 @@ class DataProvider:
 
         # --- Fallback: heuristic for unknown tickers ---
         warnings.warn(
-            f"Ticker {bare!r} not found in currency_units.json. "
-            f"Falling back to heuristic pence detection. "
-            f"Please add an entry for this ticker.",
+            f"Ticker {bare!r} for provider {self.provider!r} not found in currency_units.json. "
+            f"Falling back to heuristic pence detection. ",
             stacklevel=3,
         )
 
@@ -299,7 +301,7 @@ class DataProvider:
             mask = chunks[0][0]
             chunk_series = result.loc[mask, "close"]
             for _ in range(3):
-                if chunk_series.median() > 500:
+                if chunk_series.median() > 100:
                     chunk_series = chunk_series / 100
                 else:
                     break
