@@ -211,6 +211,53 @@ def load_benchmark_etfs(
     return df.drop(columns=["_row_id", "portfolio_year", "saved_at"], errors="ignore")
 
 
+# ---------------------------------------------------------------------------
+# Rebalancing trades (parsed InvestEngine trading statements)
+# ---------------------------------------------------------------------------
+
+def save_rebalancing_trades(df: pd.DataFrame, portfolio_year: int) -> None:
+    """Replace rebalancing trade rows for *portfolio_year* with *df*.
+
+    Stores the parsed trading statement (after ISIN extraction, ticker mapping,
+    signed quantities, etc.).  Keyed by portfolio_year so each year's trades
+    can be loaded independently.
+    """
+    _ensure_init()
+    now = datetime.now(timezone.utc).isoformat()
+    df = df.copy()
+    df["portfolio_year"] = portfolio_year
+    df["saved_at"] = now
+
+    with _get_connection() as conn:
+        try:
+            existing = pd.read_sql(
+                "SELECT * FROM rebalancing_trades WHERE portfolio_year != ?",
+                conn,
+                params=[portfolio_year],
+            )
+        except Exception:
+            existing = pd.DataFrame()
+
+        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+        combined.to_sql("rebalancing_trades", conn, if_exists="replace", index=False)
+
+
+def load_rebalancing_trades(portfolio_year: int) -> pd.DataFrame:
+    """Load rebalancing trades for *portfolio_year*. Returns empty DataFrame if not found."""
+    _ensure_init()
+    with _get_connection() as conn:
+        try:
+            df = pd.read_sql(
+                "SELECT * FROM rebalancing_trades WHERE portfolio_year = ?",  # noqa: S608
+                conn,
+                params=[portfolio_year],
+            )
+        except Exception:
+            return pd.DataFrame()
+
+    return df.drop(columns=["_row_id", "portfolio_year", "saved_at"], errors="ignore")
+
+
 def purge_screened_etfs_for_year(portfolio_year: int = 2026) -> int:
     """Delete ALL screened ETF rows for *portfolio_year*.
 
