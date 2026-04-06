@@ -17,6 +17,7 @@ __pycache__/
 archive/
 
 # Intermediate/output CSVs — DB is authoritative (commit DB after pipeline runs)
+data/raw/*.csv
 data/intermediate/*.csv
 data/output/final_portfolio.csv
 
@@ -28,6 +29,15 @@ data/output/final_portfolio.csv
 # OS
 .DS_Store
 Thumbs.db
- 
- # Gemini/AI local knowledge
- .gemini/
+
+# Gemini/AI local knowledge
+.gemini/
+.claude/
+
+# Temporary and Cache Directories
+tmp/
+data/cache/
+notebooks/data/
+
+# Backup Files
+*.bak
