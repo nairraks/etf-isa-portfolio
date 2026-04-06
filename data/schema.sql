@@ -175,3 +175,32 @@ CREATE TABLE portfolios (
     final_risk_weights           REAL,
     investment                   REAL   -- GBP amount to invest in this position
 );
+
+-- ---------------------------------------------------------------------------
+-- TABLE: rebalancing_trades
+-- Purpose: Parsed InvestEngine trading statement — one row per trade per
+--          portfolio_year. Source CSV is parsed in notebook 04; clean result
+--          is persisted here for reproducible TWR calculation without the
+--          original CSV.
+-- Written by: database.save_rebalancing_trades(df, portfolio_year)
+-- Read by:    notebook 04 via load_rebalancing_trades(portfolio_year)
+-- ---------------------------------------------------------------------------
+CREATE TABLE rebalancing_trades (
+    portfolio_year   INTEGER,  -- e.g. 2025
+    saved_at         TEXT,     -- ISO-8601 UTC timestamp
+
+    -- Parsed trade columns
+    security         TEXT,     -- Original security description from CSV
+    type             TEXT,     -- 'Buy' or 'Sell'
+    quantity         REAL,
+    price            REAL,     -- GBP per share (cleaned numeric)
+    value            REAL,     -- GBP total (cleaned numeric)
+    trade_datetime   TEXT,     -- Original datetime string from CSV
+    settlement_date  TEXT,
+    broker           TEXT,
+    isin             TEXT,     -- Extracted from security text
+    ticker           TEXT,     -- Mapped from ISIN via ISIN_TO_TICKER dict
+    trade_date       TEXT,     -- ISO-8601 date (parsed, normalized)
+    signed_qty       REAL,    -- +qty for Buy, -qty for Sell
+    signed_value     REAL     -- +value for Buy, -value for Sell
+);
