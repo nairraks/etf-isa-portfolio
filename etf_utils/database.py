@@ -149,6 +149,115 @@ def save_screened_etfs(
         combined.to_sql("screened_etfs", conn, if_exists="replace", index=False)
 
 
+# ---------------------------------------------------------------------------
+# Benchmark ETFs (replaces data/intermediate/benchmark_distributing_df_*.csv)
+# ---------------------------------------------------------------------------
+
+def save_benchmark_etfs(
+    df: pd.DataFrame,
+    asset_class: str,
+    portfolio_year: int = 2026,
+) -> None:
+    """Replace benchmark ETF rows for (portfolio_year, asset_class) with *df*.
+
+    Stores the pre-filter audit trail — all distributing ETFs with beta
+    calculated, before the top-N cut.  Replaces the old
+    ``benchmark_distributing_df_*.csv`` files.
+    """
+    _ensure_init()
+    now = datetime.now(timezone.utc).isoformat()
+    df = df.copy()
+    df["portfolio_year"] = portfolio_year
+    df["asset_class"] = asset_class
+    df["saved_at"] = now
+
+    with _get_connection() as conn:
+        try:
+            existing = pd.read_sql(
+                "SELECT * FROM benchmark_etfs WHERE portfolio_year != ? OR asset_class != ?",
+                conn,
+                params=[portfolio_year, asset_class],
+            )
+        except Exception:
+            existing = pd.DataFrame()
+
+        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+        combined.to_sql("benchmark_etfs", conn, if_exists="replace", index=False)
+
+
+def load_benchmark_etfs(
+    asset_class: str | None = None,
+    portfolio_year: int = 2026,
+) -> pd.DataFrame:
+    """Load benchmark ETFs for *portfolio_year*, optionally filtered by *asset_class*."""
+    _ensure_init()
+    params: list = [portfolio_year]
+    asset_clause = ""
+    if asset_class is not None:
+        asset_clause = "AND asset_class = ?"
+        params.append(asset_class)
+
+    query = f"""
+        SELECT * FROM benchmark_etfs
+        WHERE portfolio_year = ? {asset_clause}
+    """  # noqa: S608
+
+    with _get_connection() as conn:
+        try:
+            df = pd.read_sql(query, conn, params=params)
+        except Exception:
+            return pd.DataFrame()
+
+    return df.drop(columns=["_row_id", "portfolio_year", "saved_at"], errors="ignore")
+
+
+# ---------------------------------------------------------------------------
+# Rebalancing trades (parsed InvestEngine trading statements)
+# ---------------------------------------------------------------------------
+
+def save_rebalancing_trades(df: pd.DataFrame, portfolio_year: int) -> None:
+    """Replace rebalancing trade rows for *portfolio_year* with *df*.
+
+    Stores the parsed trading statement (after ISIN extraction, ticker mapping,
+    signed quantities, etc.).  Keyed by portfolio_year so each year's trades
+    can be loaded independently.
+    """
+    _ensure_init()
+    now = datetime.now(timezone.utc).isoformat()
+    df = df.copy()
+    df["portfolio_year"] = portfolio_year
+    df["saved_at"] = now
+
+    with _get_connection() as conn:
+        try:
+            existing = pd.read_sql(
+                "SELECT * FROM rebalancing_trades WHERE portfolio_year != ?",
+                conn,
+                params=[portfolio_year],
+            )
+        except Exception:
+            existing = pd.DataFrame()
+
+        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+        combined.to_sql("rebalancing_trades", conn, if_exists="replace", index=False)
+
+
+def load_rebalancing_trades(portfolio_year: int) -> pd.DataFrame:
+    """Load rebalancing trades for *portfolio_year*. Returns empty DataFrame if not found."""
+    _ensure_init()
+    with _get_connection() as conn:
+        try:
+            df = pd.read_sql(
+                "SELECT * FROM rebalancing_trades WHERE portfolio_year = ?",  # noqa: S608
+                conn,
+                params=[portfolio_year],
+            )
+        except Exception:
+            return pd.DataFrame()
+
+    return df.drop(columns=["_row_id", "portfolio_year", "saved_at"], errors="ignore")
+
+
 def purge_screened_etfs_for_year(portfolio_year: int = 2026) -> int:
     """Delete ALL screened ETF rows for *portfolio_year*.
 
