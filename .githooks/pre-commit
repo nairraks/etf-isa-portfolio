@@ -1,0 +1,3 @@
+#!/bin/sh
+# Auto-tag notebook code cells with hide-input before commit
+python3 scripts/ensure_hide_input.py
