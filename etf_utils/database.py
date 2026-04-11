@@ -1,6 +1,8 @@
 """SQLite persistence layer for ETF portfolio data."""
 
 import sqlite3
+import time
+import random
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
@@ -25,21 +27,45 @@ def _ensure_init() -> None:
 
 @contextmanager
 def _get_connection():
-    # timeout=30: wait up to 30 s if another process (e.g. cloud-sync) holds a lock.
+    # timeout=60: wait up to 60 s if another process (e.g. cloud-sync) holds a lock.
     # WAL mode is intentionally NOT used because the DB often lives on Google Drive /
     # OneDrive / Dropbox, which cannot reliably handle WAL shared-memory files
     # (.db-wal / .db-shm), causing intermittent "database is locked" / "Execution
     # failed" errors.  The default DELETE journal mode is safe for our single-writer,
     # sequential-notebook use case.
-    conn = sqlite3.connect(DB_PATH, timeout=30)
+    conn = sqlite3.connect(DB_PATH, timeout=60)
     try:
         yield conn
-        conn.commit()
+        # Retry commit if it fails due to locking
+        for i in range(5):
+            try:
+                conn.commit()
+                break
+            except sqlite3.OperationalError as e:
+                if i < 4 and ("locked" in str(e).lower() or "execution failed" in str(e).lower()):
+                    time.sleep(0.5 * (2 ** i) + random.uniform(0, 0.1))
+                    continue
+                raise
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except sqlite3.OperationalError:
+            pass # ignore errors during rollback
         raise
     finally:
         conn.close()
+
+
+def _execute_with_retry(func, *args, **kwargs):
+    """Execution wrapper that retries on SQLite 'database is locked' errors."""
+    for i in range(5):
+        try:
+            return func(*args, **kwargs)
+        except sqlite3.OperationalError as e:
+            if i < 4 and ("locked" in str(e).lower() or "execution failed" in str(e).lower()):
+                time.sleep(0.5 * (2 ** i) + random.uniform(0, 0.1))
+                continue
+            raise
 
 
 def init_db() -> None:
@@ -49,16 +75,18 @@ def init_db() -> None:
     automatically by pandas ``to_sql`` on first write, so their schemas adapt to
     whatever columns the DataFrames contain.
     """
-    with _get_connection() as conn:
-        conn.executescript("""
-            CREATE TABLE IF NOT EXISTS portfolio_meta (
-                year        INTEGER PRIMARY KEY,
-                is_locked   INTEGER NOT NULL DEFAULT 0,
-                locked_at   TEXT,
-                created_at  TEXT NOT NULL,
-                notes       TEXT
-            );
-        """)
+    def _do_init():
+        with _get_connection() as conn:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS portfolio_meta (
+                    year        INTEGER PRIMARY KEY,
+                    is_locked   INTEGER NOT NULL DEFAULT 0,
+                    locked_at   TEXT,
+                    created_at  TEXT NOT NULL,
+                    notes       TEXT
+                );
+            """)
+    _execute_with_retry(_do_init)
 
 
 # ---------------------------------------------------------------------------
@@ -79,20 +107,23 @@ def save_raw_etf_data(df: pd.DataFrame, asset_class: str, region_category: str) 
     df["region_category"] = region_category
     df["scraped_at"] = now
 
-    with _get_connection() as conn:
-        # Load rows for all OTHER (asset_class, region_category) combos.
-        # If the table doesn't exist yet, start with an empty frame.
-        try:
-            existing = pd.read_sql(
-                "SELECT * FROM raw_etf_data WHERE asset_class != ? OR region_category != ?",
-                conn,
-                params=[asset_class, region_category],
-            )
-        except Exception:
-            existing = pd.DataFrame()
+    def _do_save():
+        with _get_connection() as conn:
+            # Load rows for all OTHER (asset_class, region_category) combos.
+            # If the table doesn't exist yet, start with an empty frame.
+            try:
+                existing = pd.read_sql(
+                    "SELECT * FROM raw_etf_data WHERE asset_class != ? OR region_category != ?",
+                    conn,
+                    params=[asset_class, region_category],
+                )
+            except Exception:
+                existing = pd.DataFrame()
 
-        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
-        combined.to_sql("raw_etf_data", conn, if_exists="replace", index=False)
+            combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+            combined.to_sql("raw_etf_data", conn, if_exists="replace", index=False)
+
+    _execute_with_retry(_do_save)
 
 
 def load_raw_etf_data(
@@ -112,9 +143,11 @@ def load_raw_etf_data(
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     query = f"SELECT * FROM raw_etf_data {where}"  # noqa: S608
 
-    with _get_connection() as conn:
-        df = pd.read_sql(query, conn, params=params)
+    def _do_load():
+        with _get_connection() as conn:
+            return pd.read_sql(query, conn, params=params)
 
+    df = _execute_with_retry(_do_load)
     return df.drop(columns=["_row_id"], errors="ignore")
 
 
@@ -135,18 +168,21 @@ def save_screened_etfs(
     df["asset_class"] = asset_class
     df["screened_at"] = now
 
-    with _get_connection() as conn:
-        try:
-            existing = pd.read_sql(
-                "SELECT * FROM screened_etfs WHERE portfolio_year != ? OR asset_class != ?",
-                conn,
-                params=[portfolio_year, asset_class],
-            )
-        except Exception:
-            existing = pd.DataFrame()
+    def _do_save():
+        with _get_connection() as conn:
+            try:
+                existing = pd.read_sql(
+                    "SELECT * FROM screened_etfs WHERE portfolio_year != ? OR asset_class != ?",
+                    conn,
+                    params=[portfolio_year, asset_class],
+                )
+            except Exception:
+                existing = pd.DataFrame()
 
-        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
-        combined.to_sql("screened_etfs", conn, if_exists="replace", index=False)
+            combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+            combined.to_sql("screened_etfs", conn, if_exists="replace", index=False)
+
+    _execute_with_retry(_do_save)
 
 
 # ---------------------------------------------------------------------------
@@ -171,18 +207,21 @@ def save_benchmark_etfs(
     df["asset_class"] = asset_class
     df["saved_at"] = now
 
-    with _get_connection() as conn:
-        try:
-            existing = pd.read_sql(
-                "SELECT * FROM benchmark_etfs WHERE portfolio_year != ? OR asset_class != ?",
-                conn,
-                params=[portfolio_year, asset_class],
-            )
-        except Exception:
-            existing = pd.DataFrame()
+    def _do_save():
+        with _get_connection() as conn:
+            try:
+                existing = pd.read_sql(
+                    "SELECT * FROM benchmark_etfs WHERE portfolio_year != ? OR asset_class != ?",
+                    conn,
+                    params=[portfolio_year, asset_class],
+                )
+            except Exception:
+                existing = pd.DataFrame()
 
-        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
-        combined.to_sql("benchmark_etfs", conn, if_exists="replace", index=False)
+            combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+            combined.to_sql("benchmark_etfs", conn, if_exists="replace", index=False)
+
+    _execute_with_retry(_do_save)
 
 
 def load_benchmark_etfs(
@@ -202,12 +241,14 @@ def load_benchmark_etfs(
         WHERE portfolio_year = ? {asset_clause}
     """  # noqa: S608
 
-    with _get_connection() as conn:
-        try:
-            df = pd.read_sql(query, conn, params=params)
-        except Exception:
-            return pd.DataFrame()
+    def _do_load():
+        with _get_connection() as conn:
+            try:
+                return pd.read_sql(query, conn, params=params)
+            except Exception:
+                return pd.DataFrame()
 
+    df = _execute_with_retry(_do_load)
     return df.drop(columns=["_row_id", "portfolio_year", "saved_at"], errors="ignore")
 
 
@@ -228,33 +269,38 @@ def save_rebalancing_trades(df: pd.DataFrame, portfolio_year: int) -> None:
     df["portfolio_year"] = portfolio_year
     df["saved_at"] = now
 
-    with _get_connection() as conn:
-        try:
-            existing = pd.read_sql(
-                "SELECT * FROM rebalancing_trades WHERE portfolio_year != ?",
-                conn,
-                params=[portfolio_year],
-            )
-        except Exception:
-            existing = pd.DataFrame()
+    def _do_save():
+        with _get_connection() as conn:
+            try:
+                existing = pd.read_sql(
+                    "SELECT * FROM rebalancing_trades WHERE portfolio_year != ?",
+                    conn,
+                    params=[portfolio_year],
+                )
+            except Exception:
+                existing = pd.DataFrame()
 
-        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
-        combined.to_sql("rebalancing_trades", conn, if_exists="replace", index=False)
+            combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
+            combined.to_sql("rebalancing_trades", conn, if_exists="replace", index=False)
+
+    _execute_with_retry(_do_save)
 
 
 def load_rebalancing_trades(portfolio_year: int) -> pd.DataFrame:
     """Load rebalancing trades for *portfolio_year*. Returns empty DataFrame if not found."""
     _ensure_init()
-    with _get_connection() as conn:
-        try:
-            df = pd.read_sql(
-                "SELECT * FROM rebalancing_trades WHERE portfolio_year = ?",  # noqa: S608
-                conn,
-                params=[portfolio_year],
-            )
-        except Exception:
-            return pd.DataFrame()
+    def _do_load():
+        with _get_connection() as conn:
+            try:
+                return pd.read_sql(
+                    "SELECT * FROM rebalancing_trades WHERE portfolio_year = ?",  # noqa: S608
+                    conn,
+                    params=[portfolio_year],
+                )
+            except Exception:
+                return pd.DataFrame()
 
+    df = _execute_with_retry(_do_load)
     return df.drop(columns=["_row_id", "portfolio_year", "saved_at"], errors="ignore")
 
 
@@ -266,13 +312,14 @@ def purge_screened_etfs_for_year(portfolio_year: int = 2026) -> int:
     Returns the number of rows deleted.
     """
     _ensure_init()
-    with _get_connection() as conn:
-        cur = conn.execute(
-            "DELETE FROM screened_etfs WHERE portfolio_year = ?",
-            (portfolio_year,),
-        )
-        deleted = cur.rowcount
-    return deleted
+    def _do_purge():
+        with _get_connection() as conn:
+            cur = conn.execute(
+                "DELETE FROM screened_etfs WHERE portfolio_year = ?",
+                (portfolio_year,),
+            )
+            return cur.rowcount
+    return _execute_with_retry(_do_purge)
 
 
 def load_screened_etfs(
@@ -292,9 +339,11 @@ def load_screened_etfs(
         WHERE portfolio_year = ? {asset_clause}
     """  # noqa: S608
 
-    with _get_connection() as conn:
-        df = pd.read_sql(query, conn, params=params)
+    def _do_load():
+        with _get_connection() as conn:
+            return pd.read_sql(query, conn, params=params)
 
+    df = _execute_with_retry(_do_load)
     return df.drop(columns=["_row_id", "portfolio_year", "screened_at"], errors="ignore")
 
 
@@ -307,55 +356,61 @@ def save_portfolio(df: pd.DataFrame, year: int = 2026) -> None:
     _ensure_init()
     now = datetime.now(timezone.utc).isoformat()
 
-    with _get_connection() as conn:
-        row = conn.execute(
-            "SELECT is_locked FROM portfolio_meta WHERE year = ?", (year,)
-        ).fetchone()
-        if row and row[0]:
-            raise PortfolioLockedError(
-                f"Portfolio year {year} is locked and cannot be overwritten. "
-                "Call lock_portfolio() only when you are ready to version a year."
+    def _do_save():
+        with _get_connection() as conn:
+            row = conn.execute(
+                "SELECT is_locked FROM portfolio_meta WHERE year = ?", (year,)
+            ).fetchone()
+            if row and row[0]:
+                raise PortfolioLockedError(
+                    f"Portfolio year {year} is locked and cannot be overwritten. "
+                    "Call lock_portfolio() only when you are ready to version a year."
+                )
+
+            df_local = df.copy() # Avoid modifying outside scope
+            df_local["portfolio_year"] = year
+            df_local["created_at"] = now
+
+            # Read-modify-write: preserve other years' rows and handle schema changes
+            # (e.g. new columns added to the ETF data) without OperationalError.
+            # Mirrors the strategy used by save_screened_etfs / save_raw_etf_data.
+            try:
+                existing = pd.read_sql(
+                    "SELECT * FROM portfolios WHERE portfolio_year != ?",
+                    conn,
+                    params=[year],
+                )
+            except Exception:
+                existing = pd.DataFrame()
+
+            combined = pd.concat([existing, df_local], ignore_index=True) if not existing.empty else df_local
+            combined.to_sql("portfolios", conn, if_exists="replace", index=False)
+
+            conn.execute(
+                """
+                INSERT INTO portfolio_meta (year, is_locked, created_at)
+                VALUES (?, 0, ?)
+                ON CONFLICT(year) DO UPDATE SET created_at=excluded.created_at
+                """,
+                (year, now),
             )
 
-        df = df.copy()
-        df["portfolio_year"] = year
-        df["created_at"] = now
-
-        # Read-modify-write: preserve other years' rows and handle schema changes
-        # (e.g. new columns added to the ETF data) without OperationalError.
-        # Mirrors the strategy used by save_screened_etfs / save_raw_etf_data.
-        try:
-            existing = pd.read_sql(
-                "SELECT * FROM portfolios WHERE portfolio_year != ?",
-                conn,
-                params=[year],
-            )
-        except Exception:
-            existing = pd.DataFrame()
-
-        combined = pd.concat([existing, df], ignore_index=True) if not existing.empty else df
-        combined.to_sql("portfolios", conn, if_exists="replace", index=False)
-
-        conn.execute(
-            """
-            INSERT INTO portfolio_meta (year, is_locked, created_at)
-            VALUES (?, 0, ?)
-            ON CONFLICT(year) DO UPDATE SET created_at=excluded.created_at
-            """,
-            (year, now),
-        )
+    _execute_with_retry(_do_save)
 
 
 def load_portfolio(year: int = 2026) -> pd.DataFrame:
     """Load the portfolio for *year*. Returns an empty DataFrame if not found."""
     _ensure_init()
-    try:
+    def _do_load():
         with _get_connection() as conn:
-            df = pd.read_sql(
+            return pd.read_sql(
                 "SELECT * FROM portfolios WHERE portfolio_year = ?",  # noqa: S608
                 conn,
                 params=[year],
             )
+    
+    try:
+        df = _execute_with_retry(_do_load)
     except Exception:
         return pd.DataFrame()
     return df.drop(columns=["_row_id", "portfolio_year", "created_at"], errors="ignore")
@@ -365,31 +420,36 @@ def lock_portfolio(year: int, notes: str = "") -> None:
     """Permanently lock *year* so it can never be overwritten."""
     _ensure_init()
     now = datetime.now(timezone.utc).isoformat()
-    with _get_connection() as conn:
-        existing = conn.execute(
-            "SELECT year FROM portfolio_meta WHERE year = ?", (year,)
-        ).fetchone()
-        if not existing:
-            raise ValueError(
-                f"No portfolio found for year {year}. Save it first with save_portfolio()."
+    def _do_lock():
+        with _get_connection() as conn:
+            existing = conn.execute(
+                "SELECT year FROM portfolio_meta WHERE year = ?", (year,)
+            ).fetchone()
+            if not existing:
+                raise ValueError(
+                    f"No portfolio found for year {year}. Save it first with save_portfolio()."
+                )
+            conn.execute(
+                """
+                UPDATE portfolio_meta
+                SET is_locked=1, locked_at=?, notes=?
+                WHERE year=?
+                """,
+                (now, notes, year),
             )
-        conn.execute(
-            """
-            UPDATE portfolio_meta
-            SET is_locked=1, locked_at=?, notes=?
-            WHERE year=?
-            """,
-            (now, notes, year),
-        )
+    _execute_with_retry(_do_lock)
 
 
 def list_portfolio_versions() -> list[dict]:
     """Return metadata for all saved portfolio years."""
     _ensure_init()
-    with _get_connection() as conn:
-        rows = conn.execute(
-            "SELECT year, is_locked, locked_at, created_at, notes FROM portfolio_meta ORDER BY year"
-        ).fetchall()
+    def _do_list():
+        with _get_connection() as conn:
+            return conn.execute(
+                "SELECT year, is_locked, locked_at, created_at, notes FROM portfolio_meta ORDER BY year"
+            ).fetchall()
+            
+    rows = _execute_with_retry(_do_list)
     return [
         {
             "year": r[0],
@@ -426,3 +486,64 @@ def seed_2025_portfolio() -> None:
             return
 
     print("[database] Warning: no source CSV found to seed 2025 portfolio.")
+
+# ---------------------------------------------------------------------------
+# Trading 212 Instruments Cache
+# ---------------------------------------------------------------------------
+
+def save_trading212_instruments(df: pd.DataFrame) -> None:
+    """Save Trading 212 instruments to the database as a cache."""
+    _ensure_init()
+    now = datetime.now(timezone.utc).isoformat()
+    df = df.copy()
+    df["cached_at"] = now
+    def _do_save():
+        with _get_connection() as conn:
+            df.to_sql("trading212_instruments", conn, if_exists="replace", index=False)
+
+    _execute_with_retry(_do_save)
+
+
+def load_trading212_instruments() -> pd.DataFrame:
+    """Load Trading 212 instruments from the cache table. Returns empty DataFrame if not found."""
+    _ensure_init()
+    def _do_load():
+        with _get_connection() as conn:
+            return pd.read_sql("SELECT * FROM trading212_instruments", conn)
+            
+    try:
+        df = _execute_with_retry(_do_load)
+    except Exception:
+        return pd.DataFrame()
+    return df.drop(columns=["_row_id", "cached_at"], errors="ignore")
+
+
+# ---------------------------------------------------------------------------
+# InvestEngine Instruments Cache
+# ---------------------------------------------------------------------------
+
+def save_investengine_instruments(df: pd.DataFrame) -> None:
+    """Save InvestEngine instruments to the database as a cache."""
+    _ensure_init()
+    now = datetime.now(timezone.utc).isoformat()
+    df = df.copy()
+    df["cached_at"] = now
+    def _do_save():
+        with _get_connection() as conn:
+            df.to_sql("investengine_instruments", conn, if_exists="replace", index=False)
+
+    _execute_with_retry(_do_save)
+
+
+def load_investengine_instruments() -> pd.DataFrame:
+    """Load InvestEngine instruments from the cache table. Returns empty DataFrame if not found."""
+    _ensure_init()
+    def _do_load():
+        with _get_connection() as conn:
+            return pd.read_sql("SELECT * FROM investengine_instruments", conn)
+            
+    try:
+        df = _execute_with_retry(_do_load)
+    except Exception:
+        return pd.DataFrame()
+    return df.drop(columns=["_row_id", "cached_at"], errors="ignore")
