@@ -7,32 +7,46 @@ _INVESTENGINE_URL = "https://investengine.com/api/v0.31/public/securities/"
 
 def check_etf_availability(
     ticker: str,
+    name: str = None,
     url: str = _INVESTENGINE_URL,
-    timeout: int = 10,
+    timeout: int = 15,
 ) -> bool:
-    """Return True if *ticker* is listed on InvestEngine.
+    """Return True if the fund is tradeable on InvestEngine.
 
-    Searches the InvestEngine public securities API and checks that at least
-    one returned result has a ``ticker`` field that exactly matches the
-    requested ticker (case-insensitive).  A fuzzy ``len(results) > 0``
-    check is deliberately avoided because the API performs a full-text
-    search: e.g. searching "CRUD" can return an unrelated ETC whose
-    description mentions crude oil.
-
-    Returns False if the ticker is not listed or the request fails.
+    Strategy:
+    1. Search by exact ticker first.
+    2. If name is provided and ticker check fails, search by Name.
+    3. Return True if any result in the API search matches the ticker or name.
     """
     try:
+        # 1. Try search by ticker
         resp = requests.get(url, params={"search": ticker}, timeout=timeout)
         if resp.status_code == 304:
             # Not Modified — assume previously found result is still valid
             return True
         resp.raise_for_status()
+
         data = resp.json()
         results = data.get("results", data) if isinstance(data, dict) else data
-        return any(
-            r.get("ticker", "").upper() == ticker.upper()
-            for r in results
-            if isinstance(r, dict)
-        )
+        
+        if any(r.get("ticker", "").upper() == ticker.upper() for r in results if isinstance(r, dict)):
+            return True
+            
+        # 2. Try search by name if provided (fuzzy match)
+        if name:
+            resp = requests.get(url, params={"search": name}, timeout=timeout)
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", data) if isinstance(data, dict) else data
+            
+            for r in results:
+                if isinstance(r, dict):
+                    title = r.get("title", "").lower()
+                    # Check if the fund name is contained within the IE 'title' or vice versa
+                    if name.lower() in title or title in name.lower():
+                        return True
+        
+        return False
     except (requests.RequestException, ValueError):
         return False
+
