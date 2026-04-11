@@ -108,7 +108,56 @@ class DataProvider:
                 return filtered
             return cached
 
-        # Intercept fallback tickers (e.g., IMIB) that need AlphaVantage + local caching
+        # --- DYNAMIC COMMODITY HANDLING ---
+        # Intercept specialized Alpha Vantage commodity functions (GOLD, SILVER, WTI, etc.)
+        AV_COMMODITY_FUNCTIONS = {
+            "GOLD": "GOLD_SILVER_HISTORY",
+            "SILVER": "GOLD_SILVER_HISTORY",
+            "WTI": "WTI",
+            "BRENT": "BRENT",
+            "COPPER": "COPPER",
+            "ALUMINUM": "ALUMINUM",
+            "WHEAT": "WHEAT",
+            "CORN": "CORN",
+            "NATURAL_GAS": "NATURAL_GAS",
+            "SUGAR": "SUGAR",
+            "COFFEE": "COFFEE"
+        }
+        
+        up_sym = symbol.upper()
+        if up_sym in AV_COMMODITY_FUNCTIONS:
+            func = AV_COMMODITY_FUNCTIONS[up_sym]
+            print(f"Fetching commodity {up_sym} from AlphaVantage via {func}...")
+            params = {"function": func, "interval": "monthly", "apikey": ALPHAVANTAGE_API_KEY}
+            if func == "GOLD_SILVER_HISTORY":
+                params["symbol"] = up_sym
+            
+            resp = requests.get(_AV_BASE, params=params, timeout=30)
+            resp.raise_for_status()
+            raw_data = resp.json()
+            
+            # Aluminum/Copper etc. use "data" key, Metals use "data" key too for HISTORY
+            data_list = raw_data.get("data", [])
+            if not data_list:
+                raise ValueError(f"No commodity data for {up_sym!r}. Response: {raw_data}")
+            
+            df = pd.DataFrame(data_list)
+            df["date"] = pd.to_datetime(df["date"])
+            # Some use 'value', metals use 'price'
+            val_col = 'price' if 'price' in df.columns else 'value'
+            df = df.rename(columns={val_col: "close"})
+            df["close"] = pd.to_numeric(df["close"], errors='coerce')
+            df = df.set_index("date").sort_index()
+            result = df[["close"]].dropna()
+            
+            self._price_cache[cache_key] = result
+            if start_date:
+                result = result[result.index >= pd.to_datetime(start_date)]
+            if end_date:
+                result = result[result.index <= pd.to_datetime(end_date)]
+            return result
+
+        # --- EXISTING INTERCEPTS ---
         FALLBACK_TICKERS = ["IMIB"]
         if self.provider == "yfinance" and symbol in FALLBACK_TICKERS:
             from pathlib import Path
