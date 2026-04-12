@@ -41,3 +41,11 @@ notebooks/data/
 
 # Backup Files
 *.bak
+
+# Scratch scripts and temporary files
+scratch/
+scripts/
+notebooks/*.py
+out.txt
+cols.txt
+ie_api_results.json
