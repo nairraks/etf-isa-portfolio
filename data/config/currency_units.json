@@ -1,6 +1,7 @@
 {
   "_comment": "Price units as reported by each data provider for LSE-listed ETFs. GBX = pence, GBP = pounds. Used by DataProvider._normalize_pence_to_pounds as the primary source of truth.",
   "yfinance": {
+    "AIGE": "GBP",
     "AUAD": "GBX",
     "CMOP": "GBX",
     "CS51": "GBX",
@@ -14,8 +15,10 @@
     "IMIB": "GBX",
     "ISF": "GBX",
     "ISJP": "GBX",
+    "IUKD": "GBX",
     "JEQP": "GBX",
     "LCUK": "GBP",
+    "NICK": "GBP",
     "PRIJ": "GBX",
     "PRIR": "GBX",
     "QYLP": "GBP",
@@ -29,12 +32,16 @@
     "VEMT": "GBP",
     "VEVE": "GBP",
     "VGER": "GBP",
+    "WEAP": "GBP",
+    "WSIL": "GBX",
     "XDDX": "GBX",
     "XDJP": "GBX",
     "XMEX": "GBX",
-    "XNIF": "GBX"
+    "XNIF": "GBX",
+    "XSTC": "GBX"
   },
   "alphavantage": {
+    "AIGE": "GBP",
     "AUAD": "GBX",
     "CMOP": "GBX",
     "CS51": "GBX",
@@ -48,8 +55,10 @@
     "IMIB": "GBX",
     "ISF": "GBX",
     "ISJP": "GBX",
+    "IUKD": "GBX",
     "JEQP": "GBX",
     "LCUK": "GBP",
+    "NICK": "GBP",
     "PRIJ": "GBX",
     "PRIR": "GBX",
     "QYLP": "GBP",
@@ -63,9 +72,12 @@
     "VEMT": "GBP",
     "VEVE": "GBP",
     "VGER": "GBP",
+    "WEAP": "GBP",
+    "WSIL": "GBX",
     "XDDX": "GBX",
     "XDJP": "GBX",
     "XMEX": "GBX",
-    "XNIF": "GBX"
+    "XNIF": "GBX",
+    "XSTC": "GBX"
   }
 }
