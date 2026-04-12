@@ -30,6 +30,9 @@ def _normalize_symbol(symbol: str, provider: str) -> str:
     # yfinance -> AlphaVantage
     _YF_TO_AV = {v: k for k, v in _AV_TO_YF.items()}
 
+    if not symbol or not isinstance(symbol, str):
+        return symbol
+
     if "." in symbol:
         if provider == "yfinance":
             for av_suffix, yf_suffix in _AV_TO_YF.items():
@@ -40,7 +43,7 @@ def _normalize_symbol(symbol: str, provider: str) -> str:
                 if symbol.upper().endswith(yf_suffix):
                     return symbol[: -len(yf_suffix)] + av_suffix
         return symbol
-    if symbol in {"SPY", "ASHR", "EWY"}:
+    if symbol in {"SPY", "ASHR", "EWY", "EIDO"}:
         return symbol
     if provider == "yfinance":
         return f"{symbol}.L"
@@ -124,6 +127,9 @@ class DataProvider:
             "COFFEE": "COFFEE"
         }
         
+        if not symbol or not isinstance(symbol, str):
+            raise ValueError(f"Invalid symbol: {symbol!r}")
+
         up_sym = symbol.upper()
         if up_sym in AV_COMMODITY_FUNCTIONS:
             func = AV_COMMODITY_FUNCTIONS[up_sym]
