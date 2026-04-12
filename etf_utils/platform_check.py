@@ -25,10 +25,10 @@ def get_investengine_instruments() -> pd.DataFrame:
     if _ie_cache is not None:
         return _ie_cache
         
-    cached_df = load_investengine_instruments()
-    if not cached_df.empty:
-        _ie_cache = cached_df
-        return _ie_cache
+    #cached_df = None#load_investengine_instruments()
+    #if not cached_df.empty:
+    #    _ie_cache = cached_df
+    #    return _ie_cache
         
     try:
         resp = requests.get(_INVESTENGINE_URL, timeout=15)
@@ -36,7 +36,7 @@ def get_investengine_instruments() -> pd.DataFrame:
         data = resp.json()
         instruments = data.get("results", data) if isinstance(data, dict) else data
         df = pd.DataFrame(instruments)
-        save_investengine_instruments(df)
+        #save_investengine_instruments(df)
         _ie_cache = df
         return _ie_cache
     except (requests.RequestException, ValueError) as e:
@@ -49,10 +49,10 @@ def get_trading212_instruments() -> pd.DataFrame:
     if _t212_cache is not None:
         return _t212_cache
         
-    cached_df = load_trading212_instruments()
-    if not cached_df.empty:
-        _t212_cache = cached_df
-        return _t212_cache
+    #cached_df = load_trading212_instruments()
+    #if not cached_df.empty:
+    #    _t212_cache = cached_df
+    #    return _t212_cache
         
     api_key = os.getenv("TRADING212_API_KEY")
     api_secret = os.getenv("TRADING212_API_SECRET")
@@ -67,7 +67,7 @@ def get_trading212_instruments() -> pd.DataFrame:
         resp.raise_for_status()
         instruments = resp.json()
         df = pd.DataFrame(instruments)
-        save_trading212_instruments(df)
+        #save_trading212_instruments(df)
         _t212_cache = df
         return _t212_cache
     except (requests.RequestException, ValueError) as e:
@@ -77,28 +77,28 @@ def get_trading212_instruments() -> pd.DataFrame:
 def check_investengine_availability(ticker: str) -> bool:
     """Return True if the fund is tradeable on InvestEngine."""
     df = get_investengine_instruments()
-    if df.empty:
+    if not ticker or not isinstance(ticker, str):
         return False
-        
+    #print(ticker)        
     ticker_upper = ticker.upper()
     if 'ticker' in df.columns:
-        if (df['ticker'].str.upper() == ticker_upper).any():
+        if (df['ticker'].notna() & (df['ticker'].str.upper() == ticker_upper)).any():
             return True
     return False
 
 def check_trading212_availability(ticker: str) -> bool:
     """Return True if the fund is tradeable on Trading 212."""
     df = get_trading212_instruments()
-    if df.empty:
+    if not ticker or not isinstance(ticker, str):
         return False
-        
+    #print(ticker)
     ticker_upper = ticker.upper()
     if 'ticker' in df.columns:
-        if (df['ticker'].str.upper() == ticker_upper).any():
+        if (df['ticker'].notna() & (df['ticker'].str.upper() == ticker_upper)).any():
             return True
             
     if 'shortName' in df.columns:
-        if (df['shortName'].str.upper() == ticker_upper).any():
+        if (df['shortName'].notna() & (df['shortName'].str.upper() == ticker_upper)).any():
             return True
             
     return False
