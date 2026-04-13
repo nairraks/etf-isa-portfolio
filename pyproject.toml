@@ -27,6 +27,13 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Pipeline smoke tests run every cell of each notebook end-to-end. They hit
+# live data providers (JustETF, AlphaVantage, yfinance, InvestEngine) and
+# take several minutes, so they are opt-in: `uv run pytest -m pipeline`.
+markers = [
+    "pipeline: end-to-end notebook smoke tests (opt-in, hits live APIs)",
+]
+addopts = "-m 'not pipeline'"
 
 [tool.ruff.lint]
 extend-select = ["I"]
