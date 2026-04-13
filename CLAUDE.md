@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Jupyter Book documenting a systematic DIY ETF portfolio. Scrapes ETF data from JustETF, screens and ranks by risk-adjusted metrics, constructs a weighted portfolio, and tracks performance. ETFs focus on distributing (income-generating) UCITS ETFs available on InvestEngine (UK platform).
+A Jupyter Book documenting a systematic DIY ETF portfolio. Scrapes ETF data from JustETF, screens and ranks by risk-adjusted metrics, constructs a weighted portfolio, and tracks performance. ETFs focus on distributing (income-generating) UCITS ETFs available on a UK zero-fee ISA platform — the screener (`check_platform()`) checks InvestEngine first, then falls back to Trading212.
 
 ## Commands
 
