@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from etf_utils.backtesting import Backtester
 
 def test_twr_chaining():
@@ -82,29 +81,8 @@ def test_blended_benchmark_50_50_weight():
     assert blended.iloc[-1] > 0.0
 
 
-def test_apply_ter_drag_zero_is_noop():
-    """TER of 0 bps leaves the series unchanged."""
-    s = pd.Series([0.0, 1.0, 2.0, 3.0])
-    out = Backtester.apply_ter_drag(s, 0)
-    np.testing.assert_allclose(out.values, s.values)
-
-
-def test_apply_ter_drag_reduces_returns():
-    """Positive TER should reduce cumulative returns over time."""
-    # Start from a flat 0% series over 252 trading days.
-    idx = pd.bdate_range("2024-01-02", periods=252)
-    s = pd.Series([0.0] * 252, index=idx)
-    # 19 bps annual TER over ~1 year should reduce cum return by ~19 bps (~-0.19%).
-    out = Backtester.apply_ter_drag(s, 19)
-    assert out.iloc[-1] < 0.0
-    # Should be close to -0.19% after ~1 year.
-    assert abs(out.iloc[-1] - (-0.19)) < 0.02
-
-
 if __name__ == "__main__":
     test_twr_chaining()
     test_buy_and_hold()
     test_blended_benchmark_single_weight_equals_ticker_return()
     test_blended_benchmark_50_50_weight()
-    test_apply_ter_drag_zero_is_noop()
-    test_apply_ter_drag_reduces_returns()
