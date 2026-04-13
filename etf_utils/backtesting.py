@@ -120,6 +120,87 @@ class Backtester:
             daily_returns[d] = (val_now / val_start - 1) * 100 if val_start > 0 else 0
         return pd.Series(daily_returns)
 
+    def build_blended_benchmark(self, weights, ter_bps=None):
+        """
+        Build a fixed-weight blended benchmark series as a cumulative % gain.
+
+        Uses the cached ``price_df`` to compound daily returns for each component,
+        then combines them as a weighted average of cumulative growth factors.
+        This represents a "buy and forget" basket that does NOT rebalance — a
+        clean counterfactual for the actual portfolio.
+
+        :param weights: dict mapping ticker -> weight (not required to sum to 1;
+                        normalised internally).
+        :param ter_bps: optional dict mapping ticker -> annual TER in basis points
+                        (e.g. 19 for a 0.19% TER). When provided, a daily drag of
+                        ``ter_bps / 1e4 / 252`` is subtracted from each component's
+                        daily return before compounding.
+        :return: pandas Series indexed by self.all_dates, expressed as cumulative
+                 % gain (e.g. 5.0 = +5%) relative to the start date.
+        """
+        df = self.price_df
+        if df is None or df.empty:
+            return pd.Series(dtype=float)
+
+        # Restrict to tickers with price history and non-zero weight
+        available = [t for t in weights if t in df.columns and weights[t] > 0]
+        if not available:
+            return pd.Series(dtype=float)
+
+        # Normalise weights across available tickers
+        total_w = sum(weights[t] for t in available)
+        if total_w <= 0:
+            return pd.Series(dtype=float)
+        norm_w = {t: weights[t] / total_w for t in available}
+
+        # Align to backtest dates and forward-fill gaps
+        prices = df[available].reindex(self.all_dates).ffill()
+        daily_returns = prices.pct_change().fillna(0.0)
+
+        # Apply TER drag per component, if provided.
+        # Daily drag = (annual_ter_fraction) / 252.
+        if ter_bps:
+            for t in available:
+                t_bps = ter_bps.get(t, 0) or 0
+                if t_bps:
+                    daily_returns[t] = daily_returns[t] - (t_bps / 1e4) / 252.0
+
+        # Weighted portfolio daily return, then compound to a cumulative % gain.
+        port_daily = sum(daily_returns[t] * norm_w[t] for t in available)
+        cumulative = (1.0 + port_daily).cumprod() - 1.0
+        return cumulative * 100.0
+
+    @staticmethod
+    def apply_ter_drag(cumulative_return_series, ter_bps):
+        """
+        Subtract a daily TER accrual from an existing cumulative-% return series.
+
+        The input series is interpreted as cumulative % gain (e.g. 5.0 = +5%)
+        at each date in its index, consistent with the output of
+        :meth:`run_twr_series`, :meth:`run_buy_and_hold_series`, and
+        :meth:`build_blended_benchmark`.
+
+        Daily TER drag = ``ter_bps / 1e4 / 252``. The drag accumulates over
+        trading days between consecutive index entries (typically 1 per entry).
+
+        :param cumulative_return_series: pandas Series of cumulative % returns.
+        :param ter_bps: annual TER in basis points (e.g. 19 for 0.19%). A value
+                        of 0 is a no-op and returns a copy of the input.
+        :return: pandas Series of net-of-TER cumulative % returns, same index.
+        """
+        s = pd.Series(cumulative_return_series).copy()
+        if s.empty or not ter_bps:
+            return s
+
+        # Convert % series to growth factor, then strip TER each trading day.
+        factors = 1.0 + s / 100.0
+        daily_drag = (ter_bps / 1e4) / 252.0
+        # Assume one trading day per index step after the first.
+        steps = np.arange(len(s), dtype=float)
+        drag_factors = (1.0 - daily_drag) ** steps
+        net_factors = factors * drag_factors
+        return (net_factors - 1.0) * 100.0
+
     def run_simulated_rebalance(self, initial_shares, target_weights, rebalance_dates):
         """
         Simulates a rebalancing strategy at specific dates.

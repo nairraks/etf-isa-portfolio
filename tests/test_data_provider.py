@@ -83,6 +83,45 @@ def test_get_historical_prices_empty_raises(mock_download, mock_get):
         provider.get_historical_prices("FAKE")
 
 
+@patch("etf_utils.data_provider.yf.download")
+def test_get_historical_prices_warns_on_non_lse_suffix(mock_download):
+    """A ticker resolving to a non-.L listing should emit an FX-boundary warning."""
+    dates = pd.bdate_range("2024-01-02", periods=3)
+    mock_df = pd.DataFrame({"Close": [100.0, 101.0, 102.0]}, index=dates)
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    with pytest.warns(UserWarning, match="not an LSE"):
+        # TRT is mapped to .TO (Toronto) by _normalize_symbol
+        provider.get_historical_prices("AAA.TRT")
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_get_historical_prices_warns_on_us_bypass_ticker(mock_download):
+    """US-listed bypass tickers (e.g. SPY) should also warn about FX exposure."""
+    dates = pd.bdate_range("2024-01-02", periods=3)
+    mock_df = pd.DataFrame({"Close": [400.0, 401.0, 402.0]}, index=dates)
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    with pytest.warns(UserWarning, match="non-LSE .US-listed"):
+        provider.get_historical_prices("SPY")
+
+
+@patch("etf_utils.data_provider.yf.download")
+def test_get_historical_prices_no_warning_for_lse_ticker(mock_download, recwarn):
+    """A .L ticker should NOT emit the FX-boundary warning."""
+    dates = pd.bdate_range("2024-01-02", periods=3)
+    mock_df = pd.DataFrame({"Close": [100.0, 101.0, 102.0]}, index=dates)
+    mock_download.return_value = mock_df
+
+    provider = DataProvider(provider="yfinance")
+    provider.get_historical_prices("VEVE")
+    # No "non-LSE" warnings should have been raised
+    non_lse_warnings = [w for w in recwarn.list if "non-LSE" in str(w.message) or "not an LSE" in str(w.message)]
+    assert len(non_lse_warnings) == 0
+
+
 # --- get_fx_rate (mocked) ---
 
 
