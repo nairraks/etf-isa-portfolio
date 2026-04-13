@@ -83,17 +83,54 @@ Each asset class has a different intra-class Sharpe sensitivity:
 These are set by inspection of the empirical Sharpe distributions, not
 theoretical — a DIY calibration, not an institutional one.
 
-## TER vs OCF
+## TER, OCF, and adjusted-close prices
 
-JustETF exposes **TER** (Total Expense Ratio). For UCITS ETFs, the regulatory
+JustETF exposes **TER** (Total Expense Ratio). For UCITS ETFs the regulatory
 **OCF** (Ongoing Charges Figure) is effectively the same number — both
 exclude transaction costs, spread, stamp duty, and FX. Expect a difference
-< 1 bp in practice.
+< 1 bp in practice. The book uses "TER" throughout for consistency with the
+data source.
 
-This book uses "TER" for consistency with the data source. Net returns apply
-a daily drag of `ter / 252`. Neither TER nor OCF captures trading costs or
-platform fees, so reported net returns remain an upper bound on investor
-take-home.
+### Why we do NOT subtract TER from price returns
+
+The TER reduces the fund's NAV daily, and the ETF's market price is tightly
+arbitraged to NAV — so an **adjusted-close price series already embeds the
+TER drag**. The price return *is* the net return after fund costs.
+
+This pipeline takes price series from AlphaVantage (primary) and yfinance
+(fallback). Both are adjusted-close series at the ETF ticker level. So:
+
+- **Subtracting `ter / 252` from a price-derived return series would
+  double-count costs** — and that mistake is precisely what an earlier
+  iteration of `Backtester.apply_ter_drag` and the `ter_bps` parameter to
+  `Backtester.build_blended_benchmark` did. Both have been removed.
+- The reported TWR for the actual portfolio and the blended benchmark are
+  both already net-of-TER through this NAV-embedding mechanism.
+- The TER value scraped from JustETF is therefore used **only for screening**
+  (e.g. "TER < 0.50%") and for the cost-disclosure column in the portfolio
+  table — never as a manual return adjustment.
+
+### When manual fee subtraction *would* be correct
+
+The double-counting only applies to ETF price series. If you ever swap in a
+**raw index series** (e.g. MSCI World index level rather than VEVE.L price)
+or a synthetic strategy backtest, that series is gross of fees and you
+*would* need to model TER explicitly. None of the book's current notebooks
+do this.
+
+### What's still missing
+
+TER is a useful *first-order* approximation of fund cost, but the rigorous
+metric is **tracking difference** = ETF total return − index total return.
+Tracking difference captures TER plus securities lending, sampling drag, tax
+withholding and rebalancing frictions — i.e. the true cost of ownership.
+Tracking-difference analysis is listed under [Future Work](#future-work) and
+not yet implemented.
+
+Reported net-of-TER returns also do not include platform fees (£0 on
+InvestEngine and Trading212 today), spread, stamp duty (most ETFs are
+exempt), or slippage — so they remain an upper bound on real investor
+take-home, but they are not double-counting TER on top.
 
 ## FX boundary
 
@@ -151,5 +188,12 @@ Deliberately deferred to a later pass — listed here so the gap is visible:
 - **Factor-based attribution**: decomposes returns into value / growth /
   size / momentum exposures (Fama–French). Requires a factor-returns data
   source beyond JustETF.
+- **Tracking difference vs index**: ETF total return − benchmark *index*
+  total return. The rigorous measure of fund efficiency that supersedes
+  comparing TER alone, because it bundles TER, securities lending,
+  sampling drag, tax withholding and rebalancing frictions into one
+  observable number. Requires raw index-level total-return series (not
+  ETF-proxy series), which neither AlphaVantage nor yfinance provide
+  directly for the benchmarks the book uses.
 - **Rolling / sensitivity analysis**: rolling 3y Sharpe, weight sensitivity,
   start-date robustness. Planned as the Robustness appendix.
