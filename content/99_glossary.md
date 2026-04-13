@@ -22,6 +22,10 @@ notebooks and the methodology page.
 
 - **TER** — Total Expense Ratio. The fund's annual running cost as a
   percentage of assets. Effectively the same number as OCF for UCITS ETFs.
+  **Already embedded in ETF adjusted-close prices** (TER reduces NAV and
+  the market price tracks NAV), so this book does **not** subtract it
+  manually from price-derived returns — that would double-count costs. See
+  [Methodology → TER, OCF and adjusted-close prices](00b_methodology.md#ter-ocf-and-adjusted-close-prices).
 - **OCF** — Ongoing Charges Figure. The UCITS-regulated disclosure of annual
   fund running costs. Usually identical to TER (< 1 bp difference).
 
@@ -74,3 +78,8 @@ explicitly deferred (see Methodology → Future Work).
   risk-adjusted return.
 - **Factor attribution** — decomposes returns into value / growth / size /
   momentum factor exposures (Fama–French style).
+- **Tracking difference** — ETF total return minus its benchmark *index*
+  total return (not the same as comparing to another ETF). The rigorous
+  measure of fund efficiency: bundles TER, securities lending, sampling
+  drag, tax withholding and rebalancing frictions into one observable
+  number. Supersedes "look at TER alone" but requires raw index series.
