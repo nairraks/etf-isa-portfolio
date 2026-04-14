@@ -12,7 +12,7 @@ A Jupyter Book documenting a systematic DIY ETF portfolio. Scrapes ETF data from
 # Install dependencies (uses uv, not pip)
 uv sync
 
-# Run tests (114 unit tests across 8 files — fast, no network)
+# Run tests (117 unit tests across 8 files — fast, no network)
 uv run pytest tests/ -v
 
 # End-to-end pipeline smoke tests (opt-in; executes every cell of

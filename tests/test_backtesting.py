@@ -1,4 +1,5 @@
 import pandas as pd
+import pytest
 from etf_utils.backtesting import Backtester
 
 def test_twr_chaining():
@@ -46,7 +47,11 @@ def test_buy_and_hold():
     print("B&H Test Passed!")
 
 def test_blended_benchmark_single_weight_equals_ticker_return():
-    """A blended benchmark with 100% weight on one ticker ≈ that ticker's B&H return."""
+    """100% weight on one ticker => both methods match that ticker's B&H return.
+
+    With zero cross-asset allocation there is nothing to rebalance, so the
+    no-rebalance and daily-rebalanced variants must agree.
+    """
     dates = pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-05"])
     prices = {
         "A": pd.DataFrame({"close": [10.0, 12.5, 15.0]}, index=dates),
@@ -55,34 +60,175 @@ def test_blended_benchmark_single_weight_equals_ticker_return():
     bt = Backtester(prices, "2026-01-01", "2026-01-05")
     bt.all_dates = dates
 
-    blended = bt.build_blended_benchmark({"A": 1.0, "B": 0.0})
-    # A goes 10 -> 15 = +50%
-    assert abs(blended.iloc[-1] - 50.0) < 0.1
+    no_reb = bt.build_blended_benchmark_no_rebalance({"A": 1.0, "B": 0.0})
+    rebal = bt.build_blended_benchmark_rebalanced({"A": 1.0, "B": 0.0})
+
+    # A goes 10 -> 15 = +50%; both methods should match.
+    assert abs(no_reb.iloc[-1] - 50.0) < 0.1
+    assert abs(rebal.iloc[-1] - 50.0) < 0.1
 
 
-def test_blended_benchmark_50_50_weight():
-    """50/50 weighting averages the two cumulative return paths."""
+def test_blended_benchmark_no_rebalance_50_50_hand_computed():
+    """No-rebalance 50/50: weighted sum of growth factors = exactly +5.0%.
+
+    Prices:
+        A: 10.0 -> 11.0 -> 12.0   (growth factors 1.0, 1.1, 1.2)
+        B: 10.0 ->  9.5 ->  9.0   (growth factors 1.0, 0.95, 0.9)
+
+    A true buy-and-forget basket never rebalances, so::
+
+        V(t)/V(0) = 0.5 * (P_A(t)/P_A(0)) + 0.5 * (P_B(t)/P_B(0))
+        V(1)/V(0) = 0.5*1.10 + 0.5*0.95 = 1.025      -> +2.5%
+        V(2)/V(0) = 0.5*1.20 + 0.5*0.90 = 1.050      -> +5.0%
+
+    Exact to floating point. Any drift here indicates the implementation
+    has silently reintroduced daily rebalancing.
+    """
     dates = pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-05"])
     prices = {
-        # +20% total
         "A": pd.DataFrame({"close": [10.0, 11.0, 12.0]}, index=dates),
-        # -10% total
         "B": pd.DataFrame({"close": [10.0, 9.5, 9.0]}, index=dates),
     }
     bt = Backtester(prices, "2026-01-01", "2026-01-05")
     bt.all_dates = dates
 
-    blended = bt.build_blended_benchmark({"A": 0.5, "B": 0.5})
-    # Compound blend of 50/50 daily returns: approximately the mean of the
-    # two paths, but not exactly equal to the simple average of final values.
-    # Sanity: result should be between -10% and +20%.
-    assert -10.0 < blended.iloc[-1] < 20.0
-    # And above zero because A outperforms B by more than B falls below.
-    assert blended.iloc[-1] > 0.0
+    blended = bt.build_blended_benchmark_no_rebalance({"A": 0.5, "B": 0.5})
+
+    assert blended.iloc[0] == pytest.approx(0.0, abs=1e-9)
+    assert blended.iloc[1] == pytest.approx(2.5, abs=1e-9)
+    assert blended.iloc[-1] == pytest.approx(5.0, abs=1e-9)
+
+
+def test_blended_benchmark_rebalanced_50_50_hand_computed():
+    """Daily-rebalanced 50/50: compounded weighted daily returns.
+
+    Using the same price series as the no-rebalance test::
+
+        A daily returns: [NaN->0, +10.000%, +9.0909%]
+        B daily returns: [NaN->0,  -5.000%, -5.2632%]
+
+        port_daily(1) = 0.5*(+0.10)   + 0.5*(-0.0500) = +0.02500
+        port_daily(2) = 0.5*(+0.0909) + 0.5*(-0.0526) = +0.01914
+
+        V(1)/V(0) = 1.02500
+        V(2)/V(0) = 1.02500 * 1.01914 ~ 1.04462
+        final %   ~ +4.462
+
+    Crucially, this is < the no-rebalance +5.0% finish on the same prices:
+    that gap is the "volatility drag" of daily rebalancing. Small over two
+    days, but systematic and compounding over years.
+    """
+    dates = pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-05"])
+    prices = {
+        "A": pd.DataFrame({"close": [10.0, 11.0, 12.0]}, index=dates),
+        "B": pd.DataFrame({"close": [10.0, 9.5, 9.0]}, index=dates),
+    }
+    bt = Backtester(prices, "2026-01-01", "2026-01-05")
+    bt.all_dates = dates
+
+    blended = bt.build_blended_benchmark_rebalanced({"A": 0.5, "B": 0.5})
+
+    assert blended.iloc[0] == pytest.approx(0.0, abs=1e-9)
+    assert blended.iloc[1] == pytest.approx(2.5, abs=1e-9)
+    expected_day2 = (1.025 * (1 + 0.5 * (12 / 11 - 1) + 0.5 * (9 / 9.5 - 1)) - 1) * 100
+    assert blended.iloc[-1] == pytest.approx(expected_day2, abs=1e-9)
+    # Must be strictly less than the no-rebalance +5.0% for these prices.
+    assert blended.iloc[-1] < 5.0
+
+
+def test_blended_benchmark_methods_diverge_on_volatile_paths():
+    """Asymmetric paths: both methods hand-computable, and they must differ.
+
+    Two assets, 50/50 weights:
+        A: 1.00 -> 1.20 -> 1.20    (+20%, then flat)
+        B: 1.00 -> 1.00 -> 0.80    (flat, then -20%)
+
+    No-rebalance:
+        V(0) = 1.00
+        V(1) = 0.5*1.20 + 0.5*1.00 = 1.10   -> +10%
+        V(2) = 0.5*1.20 + 0.5*0.80 = 1.00   ->  0% exactly
+
+    Daily-rebalanced:
+        port_daily(1) = 0.5*0.20 + 0.5*0.00   = +0.10   -> 1.10
+        port_daily(2) = 0.5*0.00 + 0.5*-0.20  = -0.10   -> 0.99
+        final % = (0.99 - 1)*100 = -1.0 exactly
+
+    A 1.0-percentage-point gap in two days — the classic volatility-drag
+    signature that distinguishes the two definitions. A regression that
+    collapses them would make this test fail.
+    """
+    dates = pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-05"])
+    prices = {
+        "A": pd.DataFrame({"close": [1.00, 1.20, 1.20]}, index=dates),
+        "B": pd.DataFrame({"close": [1.00, 1.00, 0.80]}, index=dates),
+    }
+    bt = Backtester(prices, "2026-01-01", "2026-01-05")
+    bt.all_dates = dates
+
+    no_reb = bt.build_blended_benchmark_no_rebalance({"A": 0.5, "B": 0.5})
+    rebal = bt.build_blended_benchmark_rebalanced({"A": 0.5, "B": 0.5})
+
+    # Both start at 0%, agree at day 1 (only A has moved), diverge at day 2.
+    assert no_reb.iloc[0] == pytest.approx(0.0, abs=1e-9)
+    assert rebal.iloc[0] == pytest.approx(0.0, abs=1e-9)
+    assert no_reb.iloc[1] == pytest.approx(10.0, abs=1e-9)
+    assert rebal.iloc[1] == pytest.approx(10.0, abs=1e-9)
+
+    assert no_reb.iloc[-1] == pytest.approx(0.0, abs=1e-9)
+    assert rebal.iloc[-1] == pytest.approx(-1.0, abs=1e-9)
+    # Rebalanced strictly below no-rebalance on this path (vol drag).
+    assert rebal.iloc[-1] < no_reb.iloc[-1]
+
+
+def test_blended_benchmark_three_asset_hand_computed():
+    """Three-asset 50/30/20 dummy with exact hand-computed finals.
+
+        A: 10 -> 12 -> 14  (weight 0.5)   growth factors 1.0, 1.2, 1.4
+        B: 10 -> 11 ->  9  (weight 0.3)   growth factors 1.0, 1.1, 0.9
+        C: 10 -> 10 -> 10  (weight 0.2)   growth factors 1.0, 1.0, 1.0
+
+    No-rebalance final:
+        V(2)/V(0) = 0.5*1.4 + 0.3*0.9 + 0.2*1.0
+                  = 0.70 + 0.27 + 0.20 = 1.17
+        final %   = +17.0 (exact)
+
+    Daily-rebalanced final:
+        port_daily(1) = 0.5*(12/10-1) + 0.3*(11/10-1) + 0.2*0 = 0.13
+        port_daily(2) = 0.5*(14/12-1) + 0.3*( 9/11-1) + 0.2*0
+                      = 0.5*0.16667 + 0.3*(-0.18182)
+                      = 0.08333 - 0.05454 = 0.02879
+        V(2)/V(0) = 1.13 * 1.02879 ~ 1.16253
+        final %   ~ +16.253
+
+    Pins both methods to their exact closed-form values and asserts
+    the expected ~0.75 pp gap.
+    """
+    dates = pd.to_datetime(["2026-01-01", "2026-01-02", "2026-01-05"])
+    prices = {
+        "A": pd.DataFrame({"close": [10.0, 12.0, 14.0]}, index=dates),
+        "B": pd.DataFrame({"close": [10.0, 11.0, 9.0]}, index=dates),
+        "C": pd.DataFrame({"close": [10.0, 10.0, 10.0]}, index=dates),
+    }
+    bt = Backtester(prices, "2026-01-01", "2026-01-05")
+    bt.all_dates = dates
+    weights = {"A": 0.5, "B": 0.3, "C": 0.2}
+
+    no_reb = bt.build_blended_benchmark_no_rebalance(weights)
+    rebal = bt.build_blended_benchmark_rebalanced(weights)
+
+    assert no_reb.iloc[-1] == pytest.approx(17.0, abs=1e-9)
+
+    expected_rebal = (1.13 * (1 + 0.5 * (14 / 12 - 1) + 0.3 * (9 / 11 - 1)) - 1) * 100
+    assert rebal.iloc[-1] == pytest.approx(expected_rebal, abs=1e-9)
+    # No-rebalance beats rebalanced on this path (vol drag goes this way here).
+    assert no_reb.iloc[-1] > rebal.iloc[-1]
 
 
 if __name__ == "__main__":
     test_twr_chaining()
     test_buy_and_hold()
     test_blended_benchmark_single_weight_equals_ticker_return()
-    test_blended_benchmark_50_50_weight()
+    test_blended_benchmark_no_rebalance_50_50_hand_computed()
+    test_blended_benchmark_rebalanced_50_50_hand_computed()
+    test_blended_benchmark_methods_diverge_on_volatile_paths()
+    test_blended_benchmark_three_asset_hand_computed()

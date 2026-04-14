@@ -103,7 +103,11 @@ This pipeline takes price series from AlphaVantage (primary) and yfinance
 - **Subtracting `ter / 252` from a price-derived return series would
   double-count costs** — and that mistake is precisely what an earlier
   iteration of `Backtester.apply_ter_drag` and the `ter_bps` parameter to
-  `Backtester.build_blended_benchmark` did. Both have been removed.
+  `Backtester.build_blended_benchmark` did. Both have been removed; the
+  blended benchmark is now split into two explicit variants
+  (`build_blended_benchmark_no_rebalance` and
+  `build_blended_benchmark_rebalanced`), neither of which applies a
+  manual TER drag.
 - The reported TWR for the actual portfolio and the blended benchmark are
   both already net-of-TER through this NAV-embedding mechanism.
 - The TER value scraped from JustETF is therefore used **only for screening**
@@ -164,6 +168,34 @@ year (6 April), driven by the new annual ISA allowance. Notebook 04 parses
 actual InvestEngine trading statements to compute the **Time-Weighted Return
 (TWR)**, which chains sub-period returns across every rebalance so the
 result reflects the strategy, not the contribution timing.
+
+### Blended benchmark: two explicit variants
+
+Notebook 04 compares the portfolio's TWR against a blended benchmark built
+from the portfolio's own fixed target weights. There are two mathematically
+distinct ways to turn a fixed-weight basket into a daily return series, and
+`etf_utils.backtesting.Backtester` exposes both:
+
+- **`build_blended_benchmark_no_rebalance(weights)`** — the true
+  buy-and-forget counterfactual. Each component is bought on day 0 at its
+  target weight and never touched; weights drift as prices diverge. Computed
+  as a weighted sum of per-ticker growth factors:
+  `V(t) / V(0) = Σ wᵢ · Pᵢ(t) / Pᵢ(0)`. **This is the variant used for the
+  TWR comparison in Notebook 04**, because it matches the "what if I had
+  bought the basket and never rebalanced?" question the actual portfolio is
+  being judged against.
+- **`build_blended_benchmark_rebalanced(weights)`** — the daily-rebalanced
+  convention. Target weights are applied to each day's component returns and
+  the result is compounded; mathematically equivalent to rebalancing the
+  basket back to target at the end of every business day. This is what many
+  published "60/40" style indices report. It is kept available for future
+  multi-benchmark reporting but is **not** the primary comparator, because
+  a daily-rebalanced index is materially harder for a real portfolio to beat
+  than an untouched basket.
+
+The gap between the two series is the "volatility drag" (or "rebalancing
+bonus" in the opposite regime) — small over short windows, systematic over
+years, and its sign depends on the components' co-movement.
 
 ## Backtest limitations
 
