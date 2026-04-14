@@ -216,6 +216,32 @@ class DataProvider:
         if self.provider == "yfinance":
             try:
                 sym = _normalize_symbol(symbol, "yfinance")
+                # The book's methodology is built around LSE-listed UCITS ETFs
+                # (tickers ending in .L), which report in GBP/GBX. For any
+                # non-LSE ticker the returned price series will be in the
+                # listing exchange's currency (typically USD) — this pipeline
+                # does NOT apply an FX conversion, so results carry embedded
+                # currency exposure that the book does not strip out. We emit
+                # a single warning so users are aware of that boundary.
+                if "." in sym and not sym.upper().endswith(".L"):
+                    warnings.warn(
+                        f"{sym!r} is not an LSE (.L) listing — its price series "
+                        "will be in the listing-exchange currency (typically USD). "
+                        "This pipeline does not FX-convert to GBP; the returned "
+                        "data carries unhedged currency exposure that the book's "
+                        "methodology does not account for.",
+                        stacklevel=2,
+                    )
+                elif "." not in sym and sym.upper() in {"SPY", "ASHR", "EWY", "EIDO"}:
+                    # These are the explicitly bypassed US-listed tickers in
+                    # _normalize_symbol — same FX caveat applies.
+                    warnings.warn(
+                        f"{sym!r} is a non-LSE (US-listed) ticker — its price "
+                        "series will be in USD. This pipeline does not FX-convert "
+                        "to GBP; the returned data carries unhedged currency "
+                        "exposure that the book's methodology does not account for.",
+                        stacklevel=2,
+                    )
                 kwargs = {"progress": False, "auto_adjust": True}
                 if start_date:
                     kwargs["start"] = start_date

@@ -11,6 +11,16 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
+def pytest_addoption(parser):
+    """Register CLI flags for pipeline smoke tests."""
+    parser.addoption(
+        "--pipeline-fast",
+        action="store_true",
+        default=False,
+        help="Skip heavy pipeline notebooks (JustETF scrape) in smoke tests.",
+    )
+
+
 @pytest.fixture
 def sample_price_df():
     """Small DataFrame of mock daily prices with DatetimeIndex and 'close' column."""

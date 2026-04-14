@@ -1,11 +1,25 @@
 format: jb-book
 root: index
-chapters:
-  - file: notebooks/01_data_collection
-    title: "Data Collection"
-  - file: notebooks/02_etf_screening
-    title: "ETF Screening"
-  - file: notebooks/03_portfolio_construction
-    title: "Portfolio Construction"
-  - file: notebooks/04_performance_tracking
-    title: "Performance Tracking"
+parts:
+  - caption: Getting Started
+    chapters:
+      - file: content/00a_for_newcomers
+        title: "For Newcomers"
+      - file: content/00b_methodology
+        title: "Methodology & Assumptions"
+  - caption: Pipeline
+    chapters:
+      - file: notebooks/01_data_collection
+        title: "Data Collection"
+      - file: notebooks/02_etf_screening
+        title: "ETF Screening"
+      - file: notebooks/03_portfolio_construction
+        title: "Portfolio Construction"
+      - file: notebooks/04_performance_tracking
+        title: "Performance Tracking"
+  - caption: Reference
+    chapters:
+      - file: content/98_isa_tax_context
+        title: "ISA Tax Context"
+      - file: content/99_glossary
+        title: "Glossary"

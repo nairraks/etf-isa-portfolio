@@ -6,9 +6,13 @@ import pytest
 
 from etf_utils.metrics import (
     calculate_annualized_volatility,
+    calculate_beta,
     calculate_daily_pnl,
+    calculate_information_ratio,
+    calculate_max_drawdown,
     calculate_period_metrics,
     calculate_sharpe_ratio,
+    calculate_tracking_error,
     interpolate_adjustment_factor,
 )
 
@@ -135,3 +139,132 @@ def test_daily_pnl_investment_scaling(sample_price_df):
     # pnl_2k should be 2x pnl_1k (ignoring NaN first row)
     ratio = pnl_2k["pnl"].iloc[1:].values / pnl_1k["pnl"].iloc[1:].values
     np.testing.assert_allclose(ratio, 2.0)
+
+
+# --- calculate_max_drawdown ---
+
+
+def test_max_drawdown_v_shape():
+    """V-shape: 100 → 80 → 120. Max DD = -20% from peak at t=0 to trough at t=1."""
+    dates = pd.bdate_range("2024-01-02", periods=3)
+    prices = pd.Series([100.0, 80.0, 120.0], index=dates)
+    result = calculate_max_drawdown(prices)
+    assert result["value"] == pytest.approx(-0.20)
+    assert result["peak_date"] == dates[0]
+    assert result["trough_date"] == dates[1]
+    assert len(result["series"]) == 3
+
+
+def test_max_drawdown_monotonic_up():
+    """Monotonically rising prices → zero drawdown."""
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    prices = pd.Series([100.0, 101.0, 102.0, 103.0, 104.0], index=dates)
+    result = calculate_max_drawdown(prices)
+    assert result["value"] == pytest.approx(0.0)
+
+
+def test_max_drawdown_from_returns():
+    """Returns mode should compound to the same equity curve."""
+    dates = pd.bdate_range("2024-01-02", periods=3)
+    # +0% (day 1 base), -20%, +50% → equity 1.0, 0.8, 1.2 → same as V-shape.
+    returns = pd.Series([0.0, -0.20, 0.50], index=dates)
+    result = calculate_max_drawdown(returns, is_returns=True)
+    assert result["value"] == pytest.approx(-0.20)
+    assert result["trough_date"] == dates[1]
+
+
+def test_max_drawdown_too_few_observations():
+    prices = pd.Series([100.0])
+    with pytest.warns(UserWarning, match="Fewer than 2"):
+        result = calculate_max_drawdown(prices)
+    assert np.isnan(result["value"])
+
+
+# --- calculate_beta ---
+
+
+def test_beta_of_series_vs_itself_is_one():
+    dates = pd.bdate_range("2024-01-02", periods=20)
+    rng = np.random.default_rng(42)
+    returns = pd.Series(rng.normal(0, 0.01, 20), index=dates)
+    assert calculate_beta(returns, returns) == pytest.approx(1.0)
+
+
+def test_beta_scaling():
+    """Beta of 2x-scaled series vs the base series should be 2.0."""
+    dates = pd.bdate_range("2024-01-02", periods=20)
+    rng = np.random.default_rng(7)
+    base = pd.Series(rng.normal(0, 0.01, 20), index=dates)
+    assert calculate_beta(2 * base, base) == pytest.approx(2.0)
+
+
+def test_beta_zero_variance_benchmark():
+    dates = pd.bdate_range("2024-01-02", periods=5)
+    asset = pd.Series([0.01, -0.01, 0.02, -0.02, 0.03], index=dates)
+    flat = pd.Series([0.0] * 5, index=dates)
+    assert np.isnan(calculate_beta(asset, flat))
+
+
+def test_beta_too_few_aligned():
+    dates = pd.bdate_range("2024-01-02", periods=1)
+    r = pd.Series([0.01], index=dates)
+    with pytest.warns(UserWarning, match="Fewer than 2"):
+        assert np.isnan(calculate_beta(r, r))
+
+
+# --- calculate_tracking_error ---
+
+
+def test_tracking_error_identical_series_is_zero():
+    dates = pd.bdate_range("2024-01-02", periods=20)
+    rng = np.random.default_rng(1)
+    r = pd.Series(rng.normal(0, 0.01, 20), index=dates)
+    assert calculate_tracking_error(r, r) == pytest.approx(0.0)
+
+
+def test_tracking_error_constant_excess_is_zero():
+    """If portfolio consistently outperforms by a constant, excess std = 0."""
+    dates = pd.bdate_range("2024-01-02", periods=20)
+    rng = np.random.default_rng(2)
+    b = pd.Series(rng.normal(0, 0.01, 20), index=dates)
+    p = b + 0.0005  # constant outperformance
+    assert calculate_tracking_error(p, b) == pytest.approx(0.0, abs=1e-10)
+
+
+# --- calculate_information_ratio ---
+
+
+def test_information_ratio_positive_excess():
+    """Portfolio that outperforms should yield positive IR."""
+    dates = pd.bdate_range("2024-01-02", periods=100)
+    rng = np.random.default_rng(3)
+    b = pd.Series(rng.normal(0, 0.01, 100), index=dates)
+    p = b + rng.normal(0.0002, 0.005, 100)
+    ir = calculate_information_ratio(p, b)
+    assert ir > 0
+    assert np.isfinite(ir)
+
+
+def test_information_ratio_identical_returns_nan():
+    """Zero tracking error → NaN IR (undefined)."""
+    dates = pd.bdate_range("2024-01-02", periods=10)
+    r = pd.Series([0.01] * 10, index=dates)
+    assert np.isnan(calculate_information_ratio(r, r))
+
+
+# --- Sharpe ratio with configurable risk-free rate ---
+
+
+def test_sharpe_ratio_uses_config_default(monkeypatch):
+    """When risk_free_rate is None, Sharpe should use config.RISK_FREE_RATE."""
+    monkeypatch.setattr("etf_utils.metrics.RISK_FREE_RATE", 0.04)
+    # (0.10 - 0.04) / 0.15 = 0.4
+    assert calculate_sharpe_ratio(0.10, 0.15) == pytest.approx(0.4)
+
+
+def test_sharpe_ratio_explicit_overrides_config(monkeypatch):
+    """Explicit risk_free_rate argument overrides the config default."""
+    monkeypatch.setattr("etf_utils.metrics.RISK_FREE_RATE", 0.04)
+    assert calculate_sharpe_ratio(0.10, 0.15, risk_free_rate=0.0) == pytest.approx(
+        0.10 / 0.15
+    )
