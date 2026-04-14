@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 from collections import defaultdict
 
 class Backtester:
@@ -119,6 +118,106 @@ class Backtester:
             val_now = self.compute_portfolio_value(initial_shares, d)
             daily_returns[d] = (val_now / val_start - 1) * 100 if val_start > 0 else 0
         return pd.Series(daily_returns)
+
+    def build_blended_benchmark_no_rebalance(self, weights):
+        """
+        Build a fixed-weight blended benchmark as a true *buy-and-forget* basket.
+
+        Each ticker is "bought" at its first observed price with the given
+        weight and held without rebalancing. Weights therefore drift as the
+        component prices diverge — the natural behaviour of an untouched
+        basket. Mathematically::
+
+            V(t) / V(0) = Σ w_i · ( P_i(t) / P_i(0) )
+
+        This is the right counterfactual for "what if I had bought this
+        blended basket on day 0 and never touched it again?" — the standard
+        comparator for an actual TWR series that *does* get rebalanced.
+
+        TER drag is **deliberately not applied here**. Component price series
+        come from ETF adjusted-close data (AlphaVantage / yfinance), which
+        already embeds the fund's TER inside its NAV — applying a manual
+        ``ter / 252`` daily drag on top would double-count costs. See the
+        "TER, OCF and adjusted-close prices" section of the methodology page
+        for the full rationale; the proper next-step metric is **tracking
+        difference vs index**, listed under Future Work.
+
+        :param weights: dict mapping ticker -> weight (not required to sum
+                        to 1; normalised internally).
+        :return: pandas Series indexed by ``self.all_dates``, expressed as
+                 cumulative % gain (e.g. 5.0 = +5%) relative to the start.
+        """
+        df = self.price_df
+        if df is None or df.empty:
+            return pd.Series(dtype=float)
+
+        available = [t for t in weights if t in df.columns and weights[t] > 0]
+        if not available:
+            return pd.Series(dtype=float)
+
+        total_w = sum(weights[t] for t in available)
+        if total_w <= 0:
+            return pd.Series(dtype=float)
+        norm_w = {t: weights[t] / total_w for t in available}
+
+        # Forward- then backward-fill so every ticker has a reference P(0)
+        # even if its listing history is shorter than the backtest window.
+        prices = df[available].reindex(self.all_dates).ffill().bfill()
+        p0 = prices.iloc[0]
+        if p0.isna().any() or (p0 <= 0).any():
+            return pd.Series(dtype=float)
+
+        # Weighted sum of per-ticker growth factors — the buy-and-hold basket.
+        growth = prices.divide(p0)
+        portfolio_growth = sum(growth[t] * norm_w[t] for t in available)
+        return (portfolio_growth - 1.0) * 100.0
+
+    def build_blended_benchmark_rebalanced(self, weights):
+        """
+        Build a fixed-weight blended benchmark that is **rebalanced daily**
+        back to the target weights.
+
+        Applies the target weights to each day's component returns and
+        compounds the resulting portfolio daily return::
+
+            r_p(t) = Σ w_i · r_i(t)
+            V(t)   = Π ( 1 + r_p(t') )    for t' ≤ t
+
+        This is *not* a buy-and-forget basket — holding fixed weights each
+        day is mathematically equivalent to end-of-day rebalancing. It is
+        a common index-provider convention (many published "60/40" style
+        indices work this way) and remains useful as a separate comparator,
+        but it will differ from ``build_blended_benchmark_no_rebalance``
+        by the "volatility drag" / "rebalancing bonus" whose sign depends
+        on the components' co-movement.
+
+        TER drag is deliberately not applied (see the no-rebalance variant's
+        docstring for the full rationale).
+
+        :param weights: dict mapping ticker -> weight (not required to sum
+                        to 1; normalised internally).
+        :return: pandas Series indexed by ``self.all_dates``, expressed as
+                 cumulative % gain (e.g. 5.0 = +5%) relative to the start.
+        """
+        df = self.price_df
+        if df is None or df.empty:
+            return pd.Series(dtype=float)
+
+        available = [t for t in weights if t in df.columns and weights[t] > 0]
+        if not available:
+            return pd.Series(dtype=float)
+
+        total_w = sum(weights[t] for t in available)
+        if total_w <= 0:
+            return pd.Series(dtype=float)
+        norm_w = {t: weights[t] / total_w for t in available}
+
+        prices = df[available].reindex(self.all_dates).ffill()
+        daily_returns = prices.pct_change().fillna(0.0)
+
+        port_daily = sum(daily_returns[t] * norm_w[t] for t in available)
+        cumulative = (1.0 + port_daily).cumprod() - 1.0
+        return cumulative * 100.0
 
     def run_simulated_rebalance(self, initial_shares, target_weights, rebalance_dates):
         """

@@ -2,13 +2,56 @@
 
 A practical guide to building a systematic, low-cost ETF portfolio in a UK ISA account.
 
+```{admonition} New here?
+:class: tip
+
+Start with [For Newcomers](content/00a_for_newcomers.md) for a 5-minute
+primer on ETFs, ISAs, and the terminology used throughout the book.
+Every technical term is defined in the [Glossary](content/99_glossary.md);
+every assumption is spelled out in [Methodology & Assumptions](content/00b_methodology.md).
+```
+
 ## What This Is
 
-This book documents a data-driven approach to ETF investing using publicly available tools:
+A data-driven approach to ETF investing built on three clearly-separated
+tools: **JustETF** for ETF information, **AlphaVantage** for historical price
+data, and **InvestEngine or Trading212** for actual order execution inside a
+UK ISA. See the [Data Sources & Platforms](#data-sources-and-platforms)
+section below for the full breakdown.
 
-- **JustETF** for ETF universe data (via the `justetf-scraping` library)
-- **yfinance** for historical price data (free, no API key needed)
-- **InvestEngine** as the ISA platform (zero-fee ETF investing in the UK)
+## Data Sources and Platforms
+
+Three distinct layers — don't conflate them:
+
+| Layer | Tool | What it provides |
+|---|---|---|
+| **ETF information** | [JustETF](https://www.justetf.com) via the `justetf-scraping` fork | Ticker universe, TER, fund size, domicile, distribution policy, replication method, benchmark index |
+| **Historical prices (all numbers)** | [AlphaVantage](https://www.alphavantage.co) (primary); [yfinance](https://pypi.org/project/yfinance/) (fallback) | Daily adjusted-close series used for Sharpe, beta, drawdown, TWR and every numerical result reported in the notebooks |
+| **Order execution** | **InvestEngine or Trading212** | The actual UK ISA account used to buy and hold the selected ETFs |
+
+**Which source drives the numbers?** **AlphaVantage.** Every quantitative
+figure in the book is computed from AlphaVantage's adjusted-close series —
+it handles corporate actions more consistently for LSE listings than the
+free alternatives. A yfinance code path exists as a no-API-key fallback for
+quick exploration (toggle via `DATA_PROVIDER=yfinance` in `.env`), but the
+book's reported numbers come from AlphaVantage. Get a free key at
+<https://www.alphavantage.co/support/#api-key>.
+
+**JustETF is strictly for ETF attributes**, not prices. TER, fund size,
+distribution policy and every screening filter input originate from
+JustETF. The `justetf-scraping` library is a [fork from
+`nairraks`](https://github.com/nairraks/justetf-scraping) (not the upstream
+`druzsan`).
+
+**InvestEngine or Trading212 are execution-only**, and the screener is
+broker-agnostic: `check_platform()` in `etf_utils/platform_check.py`
+queries InvestEngine first, then falls back to Trading212 if you've set
+`TRADING212_API_KEY` and `TRADING212_API_SECRET` in `.env`. Both are
+zero-fee for ETF trading in a UK ISA. The final `platform` column in the
+portfolio table records which broker was matched for each ticker.
+
+No Bloomberg, no Morningstar, no paid feeds — every number in the book is
+reproducible from the three tools above.
 
 ## Investment Approach
 
@@ -53,8 +96,8 @@ Weights are then adjusted up or down based on each asset class's Sharpe ratio re
 │  ✓ Distributing (pays dividends)      ✓ Size > £100M                        │
 │  ✓ Size > £100M                       ✓ TER < 0.60%                         │
 │  ✓ TER < 0.50%                        ✓ Not currency-hedged                 │
-│  ✓ Beta ≥ 1 vs. 2025 benchmark        ✓ Available on InvestEngine            │
-│  ✓ Available on InvestEngine          ✓ Overlap-aware: prefer platinum &     │
+│  ✓ Beta ≥ 1 vs. 2025 benchmark        ✓ On InvestEngine or Trading212       │
+│  ✓ On InvestEngine or Trading212      ✓ Overlap-aware: prefer platinum &     │
 │                                         palladium (0% in BCOM index) over   │
 │                                         silver (4.49%) and gold (14.29%)    │
 │                                       ✓ Metal diversity: one ETC per metal  │
@@ -62,7 +105,7 @@ Weights are then adjusted up or down based on each asset class's Sharpe ratio re
 │  Commodities:                                                                │
 │  ✓ Size > £100M  ✓ TER < 0.60%  ✓ Not hedged                               │
 │  ✓ Beta ≥ 1 vs. 2025 CMOP benchmark                                         │
-│  ✓ Available on InvestEngine (naturally keeps broad diversified ETCs only)  │
+│  ✓ On InvestEngine or Trading212 (keeps broad diversified ETCs only)        │
 │                                                                              │
 │  Output: ~14 shortlisted ETFs saved to database                             │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -114,10 +157,12 @@ Weights are then adjusted up or down based on each asset class's Sharpe ratio re
 git clone https://github.com/nairraks/etf-isa-portfolio
 cd etf-isa-portfolio
 uv sync
-cp .env.example .env  # edit if using AlphaVantage
+cp .env.example .env  # add your AlphaVantage API key (free)
 ```
 
-Then run the notebooks in order (1 → 4) as described above.
+Then run the notebooks in order (1 → 4) as described above. A free
+AlphaVantage key is the default; if you'd rather skip the signup, set
+`DATA_PROVIDER=yfinance` in `.env` to use the free fallback.
 
 ---
 
