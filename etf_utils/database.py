@@ -269,6 +269,20 @@ def save_rebalancing_trades(df: pd.DataFrame, portfolio_year: int) -> None:
     df["portfolio_year"] = portfolio_year
     df["saved_at"] = now
 
+    # SQLite has no native datetime; pandas read_sql brings dates back as
+    # strings. Mixing those strings with fresh Timestamp values via concat
+    # makes to_sql fail with "type 'Timestamp' is not supported". Coerce
+    # any datetime-like columns to ISO strings before persisting.
+    for col in df.select_dtypes(include=["datetime", "datetimetz"]).columns:
+        df[col] = df[col].dt.strftime("%Y-%m-%d %H:%M:%S")
+    # Also handle Timestamps hiding in object-dtype columns (e.g. after
+    # concat with existing string data from SQLite).
+    for col in df.select_dtypes(include=["object"]).columns:
+        if df[col].apply(lambda v: isinstance(v, pd.Timestamp)).any():
+            df[col] = df[col].apply(
+                lambda v: v.strftime("%Y-%m-%d %H:%M:%S") if isinstance(v, pd.Timestamp) else v
+            )
+
     def _do_save():
         with _get_connection() as conn:
             try:
