@@ -218,6 +218,40 @@ def _align_returns(a: pd.Series, b: pd.Series) -> tuple[pd.Series, pd.Series]:
     return joined.iloc[:, 0], joined.iloc[:, 1]
 
 
+def rolling_volatility_from_cumret(
+    cum_ret_pct: pd.Series,
+    window: int = 30,
+    period: int = 252,
+) -> pd.Series:
+    """Annualised rolling volatility from a cumulative-%-return series.
+
+    Converts the cumulative percentage series (e.g. 15.43 = +15.43%) to an
+    equity-curve multiplier, differences to daily returns, then applies the
+    standard ``std * sqrt(period)`` annualisation. Output is in percent.
+    """
+    equity = 1 + cum_ret_pct / 100
+    daily = equity.pct_change()
+    return daily.rolling(window=window).std() * np.sqrt(period) * 100
+
+
+def rolling_sharpe(
+    returns: pd.Series,
+    window: int = 30,
+    period: int = 252,
+    risk_free_rate: float = 0.0,
+) -> pd.Series:
+    """Rolling annualised Sharpe ratio from a daily-return series.
+
+    ``risk_free_rate`` is the *annualised* risk-free rate; it is converted
+    to a per-period drag internally.
+    """
+    rf_daily = risk_free_rate / period
+    excess = returns - rf_daily
+    mean = excess.rolling(window).mean() * period
+    vol = returns.rolling(window).std() * np.sqrt(period)
+    return mean / vol.where(vol > 0)
+
+
 def calculate_beta(
     asset_returns: pd.Series,
     benchmark_returns: pd.Series,
