@@ -15,8 +15,10 @@ parts:
         title: "ETF Screening"
       - file: notebooks/03_portfolio_construction
         title: "Portfolio Construction"
-      - file: notebooks/04_performance_tracking
-        title: "Performance Tracking"
+      - file: notebooks/04_backtesting
+        title: "Backtesting"
+      - file: notebooks/05_pnl_tracking
+        title: "P&L Tracking"
   - caption: Reference
     chapters:
       - file: content/98_isa_tax_context
