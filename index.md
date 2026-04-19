@@ -169,12 +169,13 @@ Weights are then adjusted up or down based on each asset class's Sharpe ratio re
 git clone https://github.com/nairraks/etf-isa-portfolio
 cd etf-isa-portfolio
 uv sync
-cp .env.example .env  # add your AlphaVantage API key (free)
+cp .env.example .env  # add your AlphaVantage key (+ FRED key for notebook 04 SONIA base rate)
 ```
 
 Then run the notebooks in order (1 → 5) as described above. A free
 AlphaVantage key is the default; if you'd rather skip the signup, set
-`DATA_PROVIDER=yfinance` in `.env` to use the free fallback.
+`DATA_PROVIDER=yfinance` in `.env` to use the free fallback. Notebook 04's
+dynamic SONIA base-rate lookup uses `FRED_API_KEY`.
 
 ---
 

@@ -18,6 +18,7 @@ DB_PATH = PROJECT_ROOT / "data" / "etf_portfolio.db"
 
 DATA_PROVIDER = os.getenv("DATA_PROVIDER", "yfinance")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY", "")
+FRED_API_KEY = os.getenv("FRED_API_KEY", "")
 
 # Annualised risk-free rate used as the default in Sharpe ratio calculations.
 # Expressed as a fraction (e.g. 0.04 = 4%). Kept at 0.0 by default to preserve

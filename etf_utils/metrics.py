@@ -38,6 +38,62 @@ def calculate_annualized_volatility(prices: pd.Series, period: int = 252) -> flo
     return float(returns.std() * np.sqrt(period))
 
 
+def calculate_dynamic_rfr(
+    rate_series: pd.Series,
+    start_date: str | datetime.date,
+    end_date: str | datetime.date,
+) -> float:
+    """Return the annualized compounded risk-free rate for a specific period.
+
+    Geometrically compounds the annualized daily percentage rates (e.g. 4.0 for 4%)
+    from SONIA and returns the equivalent annualized cash return for that specific tenor.
+
+    Args:
+        rate_series: Series of daily annualized rates (as a percentage, e.g. 4.0).
+                     Index values are coerced to Datetime and sorted.
+        start_date: Start of the compounding period (inclusive).
+        end_date: End of the compounding period (inclusive).
+    """
+    if rate_series.empty:
+        return float("nan")
+
+    start_ts = pd.to_datetime(start_date)
+    end_ts = pd.to_datetime(end_date)
+    if end_ts < start_ts:
+        return float("nan")
+
+    rates = rate_series.copy()
+    if not isinstance(rates.index, pd.DatetimeIndex):
+        rates.index = pd.to_datetime(rates.index, errors="coerce")
+        rates = rates[~rates.index.isna()]
+        if rates.empty:
+            return float("nan")
+
+    rates = rates.sort_index().dropna()
+    observed = rates.loc[:end_ts]
+    if observed.empty:
+        return float("nan")
+    # Reject periods where the earliest available rate is after start_date,
+    # since there is no prior value to carry forward.
+    if observed.index.min() > start_ts:
+        return float("nan")
+
+    calendar_index = pd.date_range(start=start_ts, end=end_ts, freq="D")
+    calendar_rates = observed.reindex(calendar_index).ffill()
+    if calendar_rates.isna().any():
+        return float("nan")
+
+    # SONIA standard actual/365 compounding convention
+    daily_yields = calendar_rates / 100.0 / 365.0
+
+    total_return = float((1 + daily_yields).prod()) - 1.0
+
+    # Annualize using the inclusive calendar-day count in the requested range.
+    calendar_days = len(calendar_rates)
+    annualized_return = ((1.0 + total_return) ** (365.0 / calendar_days) - 1.0) * 100.0
+    return float(annualized_return)
+
+
 def calculate_sharpe_ratio(
     annual_return: float,
     annual_volatility: float,

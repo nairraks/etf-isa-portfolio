@@ -8,6 +8,7 @@ from etf_utils.metrics import (
     calculate_annualized_volatility,
     calculate_beta,
     calculate_daily_pnl,
+    calculate_dynamic_rfr,
     calculate_information_ratio,
     calculate_max_drawdown,
     calculate_period_metrics,
@@ -20,6 +21,7 @@ from etf_utils.metrics import (
 
 
 # --- calculate_annualized_volatility ---
+_EXPECTED_EFFECTIVE_ANNUAL_RATE_3_65_PCT = ((1 + 3.65 / 100.0 / 365.0) ** 365.0 - 1.0) * 100.0
 
 
 def test_annualized_volatility_known_values(sample_price_df):
@@ -46,6 +48,43 @@ def test_annualized_volatility_too_few_observations():
         vol = calculate_annualized_volatility(prices)
     assert np.isnan(vol)
 
+
+# --- calculate_dynamic_rfr ---
+
+def test_calculate_dynamic_rfr_basic():
+    dates = pd.bdate_range("2024-01-01", "2024-12-31")
+    # Constant rate over a full tenor should stay close to the quoted base rate.
+    rate_series = pd.Series([3.65] * len(dates), index=dates)
+
+    rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-12-31")
+    assert isinstance(rfr, float)
+    assert rfr == pytest.approx(_EXPECTED_EFFECTIVE_ANNUAL_RATE_3_65_PCT, abs=1e-4)
+
+def test_calculate_dynamic_rfr_empty():
+    dates = pd.bdate_range("2024-01-01", "2024-01-10")
+    rate_series = pd.Series([3.65] * len(dates), index=dates)
+    # Start and end date outside the series range
+    rfr = calculate_dynamic_rfr(rate_series, "2025-01-01", "2025-01-10")
+    assert np.isnan(rfr)
+
+def test_calculate_dynamic_rfr_empty_default_index():
+    rate_series = pd.Series(dtype=float)
+    rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-01-10")
+    assert np.isnan(rfr)
+def test_calculate_dynamic_rfr_single_day():
+    dates = pd.bdate_range("2024-01-01", "2024-01-01")
+    rate_series = pd.Series([3.65], index=dates)
+    rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-01-01")
+    assert rfr == pytest.approx(_EXPECTED_EFFECTIVE_ANNUAL_RATE_3_65_PCT, abs=1e-4)
+
+
+def test_calculate_dynamic_rfr_accrues_over_weekend():
+    rate_series = pd.Series(
+        [3.65, 3.65],
+        index=pd.DatetimeIndex(["2024-01-05", "2024-01-08"]),
+    )
+    rfr = calculate_dynamic_rfr(rate_series, "2024-01-05", "2024-01-07")
+    assert rfr == pytest.approx(_EXPECTED_EFFECTIVE_ANNUAL_RATE_3_65_PCT, abs=1e-4)
 
 # --- calculate_sharpe_ratio ---
 
