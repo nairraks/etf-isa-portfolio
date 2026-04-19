@@ -52,12 +52,12 @@ def test_annualized_volatility_too_few_observations():
 
 def test_calculate_dynamic_rfr_basic():
     dates = pd.bdate_range("2024-01-01", "2024-12-31")
-    # Constant 3.65% annualized rate -> 0.0365/365 = 0.0001 daily yield
+    # Constant 3.65% annualized rate -> expected annualized return is ~3.65%.
     rate_series = pd.Series([3.65] * len(dates), index=dates)
-    
+
     rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-12-31")
     assert isinstance(rfr, float)
-    assert rfr > 0.0
+    assert rfr == pytest.approx(0.0365, abs=1e-3)
 
 def test_calculate_dynamic_rfr_empty():
     dates = pd.bdate_range("2024-01-01", "2024-01-10")
