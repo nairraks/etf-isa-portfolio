@@ -54,10 +54,11 @@ def test_calculate_dynamic_rfr_basic():
     dates = pd.bdate_range("2024-01-01", "2024-12-31")
     # Constant rate over a full tenor should stay close to the quoted base rate.
     rate_series = pd.Series([3.65] * len(dates), index=dates)
+    expected = ((1 + 3.65 / 100.0 / 365.0) ** 365.0 - 1.0) * 100.0
 
     rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-12-31")
     assert isinstance(rfr, float)
-    assert rfr == pytest.approx(3.65, abs=0.1)
+    assert rfr == pytest.approx(expected, abs=0.01)
 
 def test_calculate_dynamic_rfr_empty():
     dates = pd.bdate_range("2024-01-01", "2024-01-10")
@@ -73,8 +74,9 @@ def test_calculate_dynamic_rfr_empty_default_index():
 def test_calculate_dynamic_rfr_single_day():
     dates = pd.bdate_range("2024-01-01", "2024-01-01")
     rate_series = pd.Series([3.65], index=dates)
+    expected = ((1 + 3.65 / 100.0 / 365.0) ** 365.0 - 1.0) * 100.0
     rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-01-01")
-    assert rfr > 0
+    assert rfr == pytest.approx(expected, abs=0.01)
 
 
 def test_calculate_dynamic_rfr_accrues_over_weekend():
@@ -82,8 +84,9 @@ def test_calculate_dynamic_rfr_accrues_over_weekend():
         [3.65, 3.65],
         index=pd.DatetimeIndex(["2024-01-05", "2024-01-08"]),
     )
+    expected = ((1 + 3.65 / 100.0 / 365.0) ** 365.0 - 1.0) * 100.0
     rfr = calculate_dynamic_rfr(rate_series, "2024-01-05", "2024-01-07")
-    assert rfr == pytest.approx(3.65, abs=0.1)
+    assert rfr == pytest.approx(expected, abs=0.01)
 
 # --- calculate_sharpe_ratio ---
 
