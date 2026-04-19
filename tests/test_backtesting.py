@@ -6,6 +6,7 @@ from etf_utils.backtesting import (
     dynamic_portfolio_return,
     parse_investengine_statement,
     period_metrics_table,
+    rebase_cumret,
     rolling_avg_pairwise_corr,
     rolling_constituent_beta,
 )
@@ -342,6 +343,32 @@ def test_period_metrics_table_structure():
     assert "Return B (%)" in df.columns
     # B's return > A's return in every period
     assert (df["Return B (%)"] > df["Return A (%)"]).all()
+
+
+def test_rebase_cumret_zero_at_anchor():
+    dates = pd.bdate_range("2026-01-01", periods=4)
+    cum = pd.Series([0.0, 5.0, 10.0, -2.0], index=dates)
+    out = rebase_cumret(cum, dates[1])
+    assert len(out) == 3
+    assert out.iloc[0] == pytest.approx(0.0)
+    assert out.iloc[1] == pytest.approx((1.10 / 1.05 - 1) * 100)
+    assert out.iloc[2] == pytest.approx((0.98 / 1.05 - 1) * 100)
+
+
+def test_rebase_cumret_handles_anchor_before_series_start():
+    dates = pd.bdate_range("2026-01-05", periods=3)
+    cum = pd.Series([3.0, 5.0, 7.0], index=dates)
+    out = rebase_cumret(cum, pd.Timestamp("2025-12-01"))
+    assert len(out) == 3
+    assert out.iloc[0] == pytest.approx(0.0)
+    assert out.iloc[-1] == pytest.approx((1.07 / 1.03 - 1) * 100)
+
+
+def test_rebase_cumret_empty_when_anchor_after_end():
+    dates = pd.bdate_range("2026-01-01", periods=3)
+    cum = pd.Series([0.0, 1.0, 2.0], index=dates)
+    out = rebase_cumret(cum, pd.Timestamp("2026-06-01"))
+    assert out.empty
 
 
 if __name__ == "__main__":
