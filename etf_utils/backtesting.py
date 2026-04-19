@@ -147,7 +147,10 @@ def rolling_avg_pairwise_corr(
         if matrix.isnull().all().all():
             return float("nan")
         mask = np.triu(np.ones(matrix.shape), k=1).astype(bool)
-        return float(matrix.where(mask).mean().mean())
+        # Stack the upper triangle so every unique pair is weighted equally —
+        # `.mean().mean()` would average column-means with unequal counts.
+        upper = matrix.where(mask).stack()
+        return float(upper.mean()) if not upper.empty else float("nan")
 
     return roll_corr.groupby(level=0).apply(_avg)
 
@@ -193,10 +196,19 @@ def period_metrics_table(
     event_names = list(timeline.keys())
     event_dates = [pd.to_datetime(d) for d in timeline.values()]
     rows = []
-    for i in range(len(event_names) - 1):
+    n = len(event_names) - 1
+    for i in range(n):
         s, e = event_dates[i], event_dates[i + 1]
-        r_a = ret_a.loc[s:e]
-        r_b = ret_b.loc[s:e]
+        # End-exclusive on intermediate periods so the boundary date isn't
+        # double-counted in both the period it ends and the next one it starts.
+        # The final period stays end-inclusive so the last event is captured.
+        is_last = i == n - 1
+        if is_last:
+            r_a = ret_a.loc[s:e]
+            r_b = ret_b.loc[s:e]
+        else:
+            r_a = ret_a[(ret_a.index >= s) & (ret_a.index < e)]
+            r_b = ret_b[(ret_b.index >= s) & (ret_b.index < e)]
         if len(r_a) < 2:
             continue
         cum_a = (1 + r_a).cumprod().iloc[-1] - 1
