@@ -61,7 +61,7 @@ def test_sharpe_ratio_zero_volatility():
 
 
 def test_sharpe_ratio_no_risk_free():
-    result = calculate_sharpe_ratio(12.0, 8.0)
+    result = calculate_sharpe_ratio(12.0, 8.0, risk_free_rate=0.0)
     assert result == pytest.approx(12.0 / 8.0)
 
 
