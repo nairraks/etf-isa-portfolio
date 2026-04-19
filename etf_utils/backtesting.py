@@ -1,5 +1,231 @@
-import pandas as pd
+import json
 from collections import defaultdict
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+from .config import DATA_CONFIG
+
+
+def load_isin_ticker_map(path: Path | None = None) -> dict[str, str]:
+    """Load the ISIN→ticker map shipped with the project.
+
+    Defaults to ``data/config/isin_ticker_map.json``; callers may pass a
+    custom path (e.g. for tests).
+    """
+    target = path or (DATA_CONFIG / "isin_ticker_map.json")
+    with open(target, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def parse_investengine_statement(
+    path: str | Path,
+    isin_map: dict[str, str] | None = None,
+) -> pd.DataFrame:
+    """Parse an InvestEngine trading-statement CSV into a trades DataFrame.
+
+    The statement has two header rows followed by eight columns:
+    ``security, type, quantity, price, value, trade_datetime,
+    settlement_date, broker``. Security strings include an ISIN
+    (``... / ISIN IE00...``) that is mapped to our bare ticker.
+
+    Returns a DataFrame with columns: ``ticker, trade_date, type, quantity,
+    price, value, signed_qty, signed_value`` plus the raw source columns.
+    Rows with unmappable ISINs or missing dates are dropped.
+    """
+    if isin_map is None:
+        isin_map = load_isin_ticker_map()
+
+    raw = pd.read_csv(
+        path,
+        skiprows=2,
+        header=None,
+        names=[
+            "security", "type", "quantity", "price", "value",
+            "trade_datetime", "settlement_date", "broker",
+        ],
+    )
+
+    raw["isin"] = raw["security"].str.extract(r"ISIN\s+([A-Z]{2}[A-Z0-9]{10})")
+    raw["ticker"] = raw["isin"].map(isin_map)
+    raw["trade_date"] = pd.to_datetime(
+        raw["trade_datetime"].str.strip(), format="%d/%m/%y %H:%M:%S"
+    ).dt.normalize()
+
+    raw["quantity"] = pd.to_numeric(raw["quantity"], errors="coerce")
+    for col in ("price", "value"):
+        raw[col] = (
+            raw[col].astype(str)
+            .str.replace("\u00a3", "", regex=False)
+            .str.replace(",", "")
+        )
+        raw[col] = pd.to_numeric(raw[col], errors="coerce")
+
+    trades = raw.dropna(subset=["ticker", "trade_date"]).copy()
+    sign = trades["type"].str.strip().eq("Buy").map({True: 1, False: -1})
+    trades["signed_qty"] = trades["quantity"] * sign
+    trades["signed_value"] = trades["value"] * sign
+    return trades
+
+
+def combine_investengine_statements(
+    *paths: str | Path,
+    isin_map: dict[str, str] | None = None,
+) -> pd.DataFrame:
+    """Parse and combine multiple InvestEngine statement CSVs.
+
+    Trades that appear in more than one statement (overlapping date
+    ranges) are deduplicated using ``(trade_datetime, ticker, type,
+    quantity)`` as the key, keeping the first occurrence.
+
+    Parameters
+    ----------
+    *paths : str | Path
+        One or more CSV file paths.  Non-existent paths are silently
+        skipped.
+    isin_map : dict, optional
+        ISIN→ticker mapping; forwarded to ``parse_investengine_statement``.
+
+    Returns
+    -------
+    pd.DataFrame
+        Combined, deduplicated trades DataFrame sorted by trade_date.
+    """
+    frames = []
+    for p in paths:
+        p = Path(p)
+        if p.exists():
+            frames.append(parse_investengine_statement(p, isin_map))
+
+    if not frames:
+        return pd.DataFrame()
+
+    combined = pd.concat(frames, ignore_index=True)
+    # Deduplicate overlapping trades across statements
+    combined = combined.drop_duplicates(
+        subset=["trade_datetime", "ticker", "type", "quantity"],
+        keep="first",
+    )
+    return combined.sort_values("trade_date").reset_index(drop=True)
+
+def dynamic_portfolio_return(
+    returns_df: pd.DataFrame,
+    raw_weights: dict[str, float],
+) -> pd.Series:
+    """Compute a daily portfolio return with dynamic weight renormalisation.
+
+    On each day only tickers with a non-NaN return contribute; their weights
+    are renormalised to sum to 1 that day. Avoids the bias where
+    late-listed tickers would otherwise dilute realised volatility with
+    zero returns prior to their first valid data point.
+    """
+    tickers = [t for t in raw_weights if t in returns_df.columns]
+    if not tickers:
+        return pd.Series(dtype=float, index=returns_df.index)
+    w = pd.Series({t: raw_weights[t] for t in tickers})
+    mask = returns_df[tickers].notna()
+    active_w = mask.multiply(w, axis=1)
+    row_sums = active_w.sum(axis=1)
+    norm_w = active_w.div(row_sums.where(row_sums > 0, np.nan), axis=0)
+    return (returns_df[tickers].fillna(0) * norm_w).sum(axis=1)
+
+
+def rolling_avg_pairwise_corr(
+    returns_df: pd.DataFrame,
+    window: int = 30,
+) -> pd.Series:
+    """Rolling mean of the upper-triangle (unique) pairwise correlations.
+
+    Captures "how correlated, on average, is every asset with every other
+    asset" — a blunt diversification-decay indicator that collapses to 1
+    during systemic shocks.
+    """
+    roll_corr = returns_df.rolling(window).corr()
+
+    def _avg(matrix: pd.DataFrame) -> float:
+        if matrix.isnull().all().all():
+            return float("nan")
+        mask = np.triu(np.ones(matrix.shape), k=1).astype(bool)
+        return float(matrix.where(mask).mean().mean())
+
+    return roll_corr.groupby(level=0).apply(_avg)
+
+
+def rolling_constituent_beta(
+    returns_df: pd.DataFrame,
+    port_returns: pd.Series,
+    window: int = 30,
+    clip: float | None = 3.0,
+) -> pd.Series:
+    """Mean rolling beta of each constituent vs the portfolio return series.
+
+    For each ticker, computes Cov(r_ticker, r_port) / Var(r_port) on a
+    rolling window, then averages across constituents. ``clip`` bounds each
+    per-ticker beta to ±``clip`` before averaging to suppress numerical
+    blowups in near-flat windows.
+    """
+    roll_var = port_returns.rolling(window).var()
+    betas = pd.DataFrame(index=returns_df.index)
+    for t in returns_df.columns:
+        roll_cov = returns_df[t].rolling(window).cov(port_returns)
+        beta = roll_cov / roll_var
+        if clip is not None:
+            beta = beta.clip(-clip, clip)
+        betas[t] = beta
+    return betas.mean(axis=1)
+
+
+def period_metrics_table(
+    ret_a: pd.Series,
+    ret_b: pd.Series,
+    timeline: dict[str, str],
+    label_a: str = "A",
+    label_b: str = "B",
+) -> pd.DataFrame:
+    """Period-by-period cumulative return / vol / correlation / beta.
+
+    ``timeline`` is an ordered event→date map; consecutive pairs become
+    the (start, end) of each period. For each period, computes cumulative
+    return and annualised vol for both series, plus their correlation and
+    the beta of B on A.
+    """
+    event_names = list(timeline.keys())
+    event_dates = [pd.to_datetime(d) for d in timeline.values()]
+    rows = []
+    for i in range(len(event_names) - 1):
+        s, e = event_dates[i], event_dates[i + 1]
+        r_a = ret_a.loc[s:e]
+        r_b = ret_b.loc[s:e]
+        if len(r_a) < 2:
+            continue
+        cum_a = (1 + r_a).cumprod().iloc[-1] - 1
+        cum_b = (1 + r_b).cumprod().iloc[-1] - 1
+        vol_a = r_a.std() * np.sqrt(252)
+        vol_b = r_b.std() * np.sqrt(252)
+        var_a = r_a.var()
+        beta = r_b.cov(r_a) / var_a if var_a > 1e-10 else np.nan
+        rows.append({
+            "Period": f"{event_names[i]}  \u2192  {event_names[i + 1]}",
+            "Days": len(r_a),
+            f"Return {label_a} (%)": cum_a * 100,
+            f"Return {label_b} (%)": cum_b * 100,
+            "Excess (%)": (cum_b - cum_a) * 100,
+            f"Vol {label_a} (ann.)": vol_a * 100,
+            f"Vol {label_b} (ann.)": vol_b * 100,
+            "Correlation": r_a.corr(r_b),
+            "Beta": beta,
+        })
+    return pd.DataFrame(rows).set_index("Period") if rows else pd.DataFrame()
+
+
+def rebase_cumret(cum_pct: pd.Series, anchor) -> pd.Series:
+    s = cum_pct.loc[pd.Timestamp(anchor):]
+    if s.empty:
+        return s
+    base = 1 + s.iloc[0] / 100
+    return ((1 + s / 100) / base - 1) * 100
+
 
 class Backtester:
     def __init__(self, price_data_dict, initial_trade_date, end_date=None):
@@ -12,6 +238,23 @@ class Backtester:
         self.start_date = pd.Timestamp(initial_trade_date).normalize()
         self.end_date = pd.Timestamp(end_date).normalize() if end_date else pd.Timestamp.now().normalize()
         self.all_dates = pd.bdate_range(self.start_date, self.end_date)
+
+    @classmethod
+    def from_trades(cls, trades_df, provider, end_date=None):
+        """Build a Backtester sized to a trades DataFrame.
+
+        Fetches historical prices for every unique ticker in ``trades_df``
+        and anchors the backtest at the first trade date.
+        """
+        tickers = sorted(trades_df["ticker"].dropna().unique().tolist())
+        price_data = {}
+        for ticker in tickers:
+            try:
+                price_data[ticker] = provider.get_historical_prices(ticker)
+            except Exception as exc:
+                print(f"  Warning: could not fetch data for {ticker}: {exc}")
+        first_trade = pd.Timestamp(trades_df["trade_date"].min()).normalize()
+        return cls(price_data, first_trade, end_date)
 
     @property
     def price_df(self):

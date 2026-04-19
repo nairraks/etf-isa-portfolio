@@ -17,6 +17,8 @@ parts:
         title: "Portfolio Construction"
       - file: notebooks/04_performance_tracking
         title: "Performance Tracking"
+      - file: notebooks/05_backtesting
+        title: "Backtesting"
   - caption: Reference
     chapters:
       - file: content/98_isa_tax_context
