@@ -38,6 +38,40 @@ def calculate_annualized_volatility(prices: pd.Series, period: int = 252) -> flo
     return float(returns.std() * np.sqrt(period))
 
 
+def calculate_dynamic_rfr(
+    rate_series: pd.Series,
+    start_date: str | datetime.date,
+    end_date: str | datetime.date,
+) -> float:
+    """Return the annualized compounded risk-free rate for a specific period.
+
+    Geometrically compounds the annualized daily percentage rates (e.g. 4.0 for 4%)
+    from SONIA and returns the equivalent annualized cash return for that specific tenor.
+
+    Args:
+        rate_series: Series of daily annualized rates (as a percentage, e.g. 4.0).
+                     The series must be indexed by Datetime.
+        start_date: Start of the compounding period (inclusive).
+        end_date: End of the compounding period (inclusive).
+    """
+    subset = rate_series.loc[str(start_date):str(end_date)].dropna()
+    if subset.empty:
+        return float("nan")
+
+    # SONIA standard actual/365 compounding convention
+    daily_yields = subset / 100.0 / 365.0
+
+    total_return = float((1 + daily_yields).prod()) - 1.0
+
+    # Calculate actual calendar days spanned
+    n_days = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days
+    if n_days <= 0:
+        return float("nan")
+
+    annualized_return = ((1.0 + total_return) ** (365.0 / n_days) - 1.0) * 100.0
+    return float(annualized_return)
+
+
 def calculate_sharpe_ratio(
     annual_return: float,
     annual_volatility: float,
