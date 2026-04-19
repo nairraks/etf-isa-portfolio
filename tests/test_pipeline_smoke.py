@@ -1,6 +1,6 @@
 """End-to-end pipeline smoke tests.
 
-Executes each notebook in the book (01 → 04) top-to-bottom and asserts that
+Executes each notebook in the book (01 → 05) top-to-bottom and asserts that
 no cell raises. Catches regressions that unit tests miss — e.g. the
 `KeyError: 'platform'` the notebook 02 equities cell used to raise when its
 per-file `try/except` caught every CSV.
@@ -10,7 +10,7 @@ default `pytest` run because they hit live data providers (AlphaVantage,
 yfinance, InvestEngine API, JustETF scraper) and can take several minutes.
 
 Invoke explicitly:
-    uv run pytest -m pipeline                    # all four notebooks
+    uv run pytest -m pipeline                    # all five notebooks
     uv run pytest -m pipeline -k screening       # single notebook
     uv run pytest -m pipeline --pipeline-fast    # skip nb01 (JustETF scrape)
 """
@@ -33,6 +33,7 @@ NOTEBOOKS = [
     "02_etf_screening.ipynb",
     "03_portfolio_construction.ipynb",
     "04_performance_tracking.ipynb",
+    "05_backtesting.ipynb",
 ]
 
 # nb01 scrapes JustETF for every asset class — minutes of HTTP. Allow the

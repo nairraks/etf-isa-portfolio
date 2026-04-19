@@ -6,6 +6,7 @@ exclude_patterns:
   - README.md
   - CLAUDE.md
   - "archive/**"
+  - ".claude/**"
   - ".venv/**"
   - ".pytest_cache/**"
   - "tests/**"

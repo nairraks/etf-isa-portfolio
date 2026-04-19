@@ -219,6 +219,14 @@ def period_metrics_table(
     return pd.DataFrame(rows).set_index("Period") if rows else pd.DataFrame()
 
 
+def rebase_cumret(cum_pct: pd.Series, anchor) -> pd.Series:
+    s = cum_pct.loc[pd.Timestamp(anchor):]
+    if s.empty:
+        return s
+    base = 1 + s.iloc[0] / 100
+    return ((1 + s / 100) / base - 1) * 100
+
+
 class Backtester:
     def __init__(self, price_data_dict, initial_trade_date, end_date=None):
         """
