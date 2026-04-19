@@ -73,6 +73,8 @@ def calculate_dynamic_rfr(
     observed = rates.loc[:end_ts]
     if observed.empty:
         return float("nan")
+    if observed.index.min() > start_ts:
+        return float("nan")
 
     calendar_index = pd.date_range(start=start_ts, end=end_ts, freq="D")
     calendar_rates = observed.reindex(calendar_index).ffill()
