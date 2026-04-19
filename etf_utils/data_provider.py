@@ -8,7 +8,7 @@ import pandas as pd
 import requests
 import yfinance as yf
 
-from .config import ALPHAVANTAGE_API_KEY, DATA_PROVIDER
+from .config import ALPHAVANTAGE_API_KEY, DATA_PROVIDER, FRED_API_KEY
 
 _AV_BASE = "https://www.alphavantage.co/query"
 
@@ -110,6 +110,47 @@ class DataProvider:
                     filtered = filtered[filtered.index <= pd.to_datetime(end_date)]
                 return filtered
             return cached
+
+        # --- FRED API HANDLING ---
+        if symbol.upper().startswith("FRED:"):
+            from pathlib import Path
+            
+            series_id = symbol.split(":")[1]
+            cache_dir = Path("data/intermediate")
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_file = cache_dir / f"fred_cache_{series_id}.csv"
+            
+            if cache_file.exists():
+                print(f"Loading {symbol} from local FRED cache: {cache_file}")
+                df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+                result = df[["close"]]
+            else:
+                print(f"Fetching {symbol} from FRED (API call)...")
+                url = f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}&api_key={FRED_API_KEY}&file_type=json"
+                resp = requests.get(url, timeout=30)
+                resp.raise_for_status()
+                data = resp.json()
+                observations = data.get("observations", [])
+                
+                if not observations:
+                    raise ValueError(f"No FRED data for {symbol!r}. Check API key and series ID.")
+                
+                df = pd.DataFrame(observations)
+                df['date'] = pd.to_datetime(df['date'])
+                df['value'] = pd.to_numeric(df['value'], errors='coerce')
+                df = df.rename(columns={"value": "close"})
+                df = df.set_index("date").sort_index()
+                result = df[["close"]].dropna()
+                
+                result.to_csv(cache_file)
+                print(f"Saved {symbol} to local cache: {cache_file}")
+                
+            self._price_cache[cache_key] = result
+            if start_date:
+                result = result[result.index >= pd.to_datetime(start_date)]
+            if end_date:
+                result = result[result.index <= pd.to_datetime(end_date)]
+            return result
 
         # --- DYNAMIC COMMODITY HANDLING ---
         # Intercept specialized Alpha Vantage commodity functions (GOLD, SILVER, WTI, etc.)

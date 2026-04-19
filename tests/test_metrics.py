@@ -16,6 +16,7 @@ from etf_utils.metrics import (
     interpolate_adjustment_factor,
     rolling_sharpe,
     rolling_volatility_from_cumret,
+    calculate_dynamic_rfr,
 )
 
 
@@ -46,6 +47,31 @@ def test_annualized_volatility_too_few_observations():
         vol = calculate_annualized_volatility(prices)
     assert np.isnan(vol)
 
+
+# --- calculate_dynamic_rfr ---
+
+def test_calculate_dynamic_rfr_basic():
+    dates = pd.bdate_range("2024-01-01", "2024-12-31")
+    # Constant 3.65% annualized rate -> 0.0365/365 = 0.0001 daily yield
+    rate_series = pd.Series([3.65] * len(dates), index=dates)
+    
+    rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-12-31")
+    assert isinstance(rfr, float)
+    assert rfr > 0.0
+
+def test_calculate_dynamic_rfr_empty():
+    dates = pd.bdate_range("2024-01-01", "2024-01-10")
+    rate_series = pd.Series([3.65] * len(dates), index=dates)
+    # Start and end date outside the series range
+    rfr = calculate_dynamic_rfr(rate_series, "2025-01-01", "2025-01-10")
+    assert np.isnan(rfr)
+
+def test_calculate_dynamic_rfr_single_day():
+    dates = pd.bdate_range("2024-01-01", "2024-01-01")
+    rate_series = pd.Series([3.65], index=dates)
+    rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-01-01")
+    # n_days = 0, should return NaN
+    assert np.isnan(rfr)
 
 # --- calculate_sharpe_ratio ---
 
