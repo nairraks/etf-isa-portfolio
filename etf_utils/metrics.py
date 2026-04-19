@@ -73,6 +73,7 @@ def calculate_dynamic_rfr(
     observed = rates.loc[:end_ts]
     if observed.empty:
         return float("nan")
+    # Reject periods where the available observations do not cover start_date.
     if observed.index.min() > start_ts:
         return float("nan")
 
@@ -86,7 +87,7 @@ def calculate_dynamic_rfr(
 
     total_return = float((1 + daily_yields).prod()) - 1.0
 
-    # Annualize using the same inclusive calendar-day accrual count.
+    # Annualize using the inclusive calendar-day count in the requested range.
     n_days = len(calendar_rates)
     annualized_return = ((1.0 + total_return) ** (365.0 / n_days) - 1.0) * 100.0
     return float(annualized_return)
