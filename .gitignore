@@ -21,6 +21,9 @@ data/raw/*.csv
 data/intermediate/*.csv
 data/output/final_portfolio.csv
 
+# Broker statements — real account data, never commit
+data/investment_statements/
+
 # IDE
 .vscode/
 .idea/
