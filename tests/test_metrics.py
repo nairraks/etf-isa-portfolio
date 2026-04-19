@@ -66,6 +66,10 @@ def test_calculate_dynamic_rfr_empty():
     rfr = calculate_dynamic_rfr(rate_series, "2025-01-01", "2025-01-10")
     assert np.isnan(rfr)
 
+def test_calculate_dynamic_rfr_empty_default_index():
+    rate_series = pd.Series(dtype=float)
+    rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-01-10")
+    assert np.isnan(rfr)
 def test_calculate_dynamic_rfr_single_day():
     dates = pd.bdate_range("2024-01-01", "2024-01-01")
     rate_series = pd.Series([3.65], index=dates)
