@@ -1,6 +1,15 @@
+import numpy as np
 import pandas as pd
 import pytest
-from etf_utils.backtesting import Backtester
+from etf_utils.backtesting import (
+    Backtester,
+    dynamic_portfolio_return,
+    parse_investengine_statement,
+    period_metrics_table,
+    rebase_cumret,
+    rolling_avg_pairwise_corr,
+    rolling_constituent_beta,
+)
 
 def test_twr_chaining():
     # Jan 1 2026 = Thu, Jan 2 = Fri, Jan 5 = Mon, Jan 6 = Tue
@@ -222,6 +231,144 @@ def test_blended_benchmark_three_asset_hand_computed():
     assert rebal.iloc[-1] == pytest.approx(expected_rebal, abs=1e-9)
     # No-rebalance beats rebalanced on this path (vol drag goes this way here).
     assert no_reb.iloc[-1] > rebal.iloc[-1]
+
+
+def test_parse_investengine_statement_roundtrip(tmp_path):
+    """Parser extracts ticker/date/price and sets signed_qty sign from Buy/Sell."""
+    csv_body = (
+        "Header line 1\n"
+        "Header line 2\n"
+        "Vanguard EUR Corporate Bond / ISIN IE00BZ163G84,Buy,10.0,\u00a350.00,\u00a3500.00,"
+        "12/05/25 14:16:49,14/05/25,None\n"
+        "iShares Core UK Gilts / ISIN IE00B1FZSB30,Sell,5.0,\u00a320.00,\u00a3100.00,"
+        "13/05/25 09:00:00,15/05/25,None\n"
+        "Unknown Fund / ISIN XX9999999999,Buy,1.0,\u00a31.00,\u00a31.00,"
+        "14/05/25 10:00:00,16/05/25,None\n"
+    )
+    path = tmp_path / "trades.csv"
+    path.write_text(csv_body, encoding="utf-8")
+
+    trades = parse_investengine_statement(path)
+
+    # Unknown ISIN row is dropped (ticker is NaN after map).
+    assert len(trades) == 2
+    assert set(trades["ticker"]) == {"VECP", "IGLT"}
+
+    buy = trades[trades["ticker"] == "VECP"].iloc[0]
+    assert buy["signed_qty"] == pytest.approx(10.0)
+    assert buy["signed_value"] == pytest.approx(500.0)
+    assert buy["trade_date"] == pd.Timestamp("2025-05-12")
+
+    sell = trades[trades["ticker"] == "IGLT"].iloc[0]
+    assert sell["signed_qty"] == pytest.approx(-5.0)
+    assert sell["signed_value"] == pytest.approx(-100.0)
+
+
+def test_parse_investengine_statement_custom_isin_map(tmp_path):
+    """Passing a custom ISIN map overrides the packaged default."""
+    csv_body = (
+        "Header line 1\n"
+        "Header line 2\n"
+        "Synthetic Fund / ISIN ZZ0000000001,Buy,1.0,\u00a31.0,\u00a31.0,"
+        "01/01/26 00:00:00,01/01/26,None\n"
+    )
+    path = tmp_path / "trades.csv"
+    path.write_text(csv_body, encoding="utf-8")
+    trades = parse_investengine_statement(path, isin_map={"ZZ0000000001": "SYNZ"})
+    assert list(trades["ticker"]) == ["SYNZ"]
+
+
+def test_dynamic_portfolio_return_renormalises_weights():
+    """When one ticker is NaN, its weight is redistributed to the rest."""
+    dates = pd.to_datetime(["2026-01-02", "2026-01-05", "2026-01-06"])
+    rets = pd.DataFrame({
+        "A": [0.01, 0.02, 0.03],
+        "B": [np.nan, 0.04, 0.05],
+    }, index=dates)
+    weights = {"A": 0.6, "B": 0.4}
+
+    port = dynamic_portfolio_return(rets, weights)
+
+    # Day 0: only A valid -> weight renormalised to 1.0 on A
+    assert port.iloc[0] == pytest.approx(0.01)
+    # Day 1: both valid -> 0.6*0.02 + 0.4*0.04 = 0.028
+    assert port.iloc[1] == pytest.approx(0.6 * 0.02 + 0.4 * 0.04)
+
+
+def test_dynamic_portfolio_return_ignores_missing_tickers():
+    """Weights for tickers absent from the returns DF are silently dropped."""
+    dates = pd.to_datetime(["2026-01-02", "2026-01-05"])
+    rets = pd.DataFrame({"A": [0.05, 0.1]}, index=dates)
+    port = dynamic_portfolio_return(rets, {"A": 0.5, "NOT_THERE": 0.5})
+    # Only A remains -> fully weighted
+    assert port.iloc[0] == pytest.approx(0.05)
+    assert port.iloc[1] == pytest.approx(0.1)
+
+
+def test_rolling_avg_pairwise_corr_constant_series_equals_one():
+    """Two perfectly correlated series -> average pairwise corr is 1.0."""
+    dates = pd.bdate_range("2026-01-01", periods=10)
+    rets = pd.DataFrame({
+        "A": np.linspace(0.01, 0.05, 10),
+        "B": np.linspace(0.02, 0.06, 10),  # same linear relationship
+    }, index=dates)
+    corr = rolling_avg_pairwise_corr(rets, window=5)
+    # After window fills, corr should be ~1
+    assert corr.dropna().iloc[-1] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_rolling_constituent_beta_self_equals_one():
+    """Beta of a single-asset portfolio on itself is 1.0."""
+    dates = pd.bdate_range("2026-01-01", periods=15)
+    rng = np.random.default_rng(42)
+    series = pd.Series(rng.normal(0, 0.01, size=15), index=dates)
+    rets = pd.DataFrame({"A": series})
+    beta = rolling_constituent_beta(rets, series, window=10)
+    assert beta.dropna().iloc[-1] == pytest.approx(1.0, abs=1e-6)
+
+
+def test_period_metrics_table_structure():
+    """Table has one row per consecutive timeline pair and exact-return values."""
+    dates = pd.bdate_range("2026-01-01", periods=20)
+    ret_a = pd.Series([0.01] * 20, index=dates)  # +1%/day
+    ret_b = pd.Series([0.02] * 20, index=dates)  # +2%/day
+    timeline = {
+        "Start": dates[0].strftime("%Y-%m-%d"),
+        "Mid":   dates[9].strftime("%Y-%m-%d"),
+        "End":   dates[-1].strftime("%Y-%m-%d"),
+    }
+    df = period_metrics_table(ret_a, ret_b, timeline, label_a="A", label_b="B")
+    assert len(df) == 2
+    assert "Return A (%)" in df.columns
+    assert "Return B (%)" in df.columns
+    # B's return > A's return in every period
+    assert (df["Return B (%)"] > df["Return A (%)"]).all()
+
+
+def test_rebase_cumret_zero_at_anchor():
+    dates = pd.bdate_range("2026-01-01", periods=4)
+    cum = pd.Series([0.0, 5.0, 10.0, -2.0], index=dates)
+    out = rebase_cumret(cum, dates[1])
+    assert len(out) == 3
+    assert out.iloc[0] == pytest.approx(0.0)
+    assert out.iloc[1] == pytest.approx((1.10 / 1.05 - 1) * 100)
+    assert out.iloc[2] == pytest.approx((0.98 / 1.05 - 1) * 100)
+
+
+def test_rebase_cumret_handles_anchor_before_series_start():
+    dates = pd.bdate_range("2026-01-05", periods=3)
+    cum = pd.Series([3.0, 5.0, 7.0], index=dates)
+    out = rebase_cumret(cum, pd.Timestamp("2025-12-01"))
+    assert len(out) == 3
+    assert out.iloc[0] == pytest.approx(0.0)
+    assert out.iloc[-1] == pytest.approx((1.07 / 1.03 - 1) * 100)
+
+
+def test_rebase_cumret_empty_when_anchor_after_end():
+    dates = pd.bdate_range("2026-01-01", periods=3)
+    cum = pd.Series([0.0, 1.0, 2.0], index=dates)
+    out = rebase_cumret(cum, pd.Timestamp("2026-06-01"))
+    assert out.empty
 
 
 if __name__ == "__main__":

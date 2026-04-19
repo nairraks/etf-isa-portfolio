@@ -144,6 +144,18 @@ Weights are then adjusted up or down based on each asset class's Sharpe ratio re
 │                                                                              │
 │  Monitor: track total return vs. benchmarks over time                       │
 └──────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│  STEP 5 — BACKTESTING  (notebook 05)                                         │
+│  "How would this portfolio have performed last year?"                        │
+│                                                                              │
+│  • Replay the 2025 portfolio over FY25 using real trade ledger              │
+│  • Counterfactual: how would the 2026 weights have performed over FY25?     │
+│  • Compare TWR / MWR / Sharpe / max drawdown vs. blended benchmark          │
+│                                                                              │
+│  Sanity check: ground the 2026 portfolio in realised FY25 behaviour         │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Browse the Notebooks
@@ -160,7 +172,7 @@ uv sync
 cp .env.example .env  # add your AlphaVantage API key (free)
 ```
 
-Then run the notebooks in order (1 → 4) as described above. A free
+Then run the notebooks in order (1 → 5) as described above. A free
 AlphaVantage key is the default; if you'd rather skip the signup, set
 `DATA_PROVIDER=yfinance` in `.env` to use the free fallback.
 

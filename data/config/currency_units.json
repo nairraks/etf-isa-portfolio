@@ -1,8 +1,10 @@
 {
   "_comment": "Price units as reported by each data provider for LSE-listed ETFs. GBX = pence, GBP = pounds. Used by DataProvider._normalize_pence_to_pounds as the primary source of truth.",
   "yfinance": {
+    "AIGA": "GBP",
     "AIGE": "GBP",
     "AUAD": "GBX",
+    "COPA": "GBP",
     "CMOP": "GBX",
     "CS51": "GBX",
     "CSWG": "GBX",
@@ -24,6 +26,7 @@
     "QYLP": "GBP",
     "SAAA": "GBX",
     "SAUS": "GBX",
+    "RMAP": "GBP",
     "SGLN": "GBX",
     "SLXX": "GBP",
     "TRXG": "GBX",
@@ -41,8 +44,10 @@
     "XSTC": "GBX"
   },
   "alphavantage": {
+    "AIGA": "GBP",
     "AIGE": "GBP",
     "AUAD": "GBX",
+    "COPA": "GBP",
     "CMOP": "GBX",
     "CS51": "GBX",
     "CSWG": "GBX",
@@ -64,6 +69,7 @@
     "QYLP": "GBP",
     "SAAA": "GBX",
     "SAUS": "GBX",
+    "RMAP": "GBP",
     "SGLN": "GBX",
     "SLXX": "GBP",
     "TRXG": "GBX",

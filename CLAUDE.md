@@ -16,7 +16,7 @@ uv sync
 uv run pytest tests/ -v
 
 # End-to-end pipeline smoke tests (opt-in; executes every cell of
-# notebooks 01-04 against live data providers — takes several minutes).
+# notebooks 01-05 against live data providers — takes several minutes).
 # Catches regressions that unit tests miss (e.g. KeyError on screened frames).
 uv run pytest -m pipeline
 uv run pytest -m pipeline --pipeline-fast   # skip nb01 (JustETF scrape)
@@ -44,10 +44,11 @@ etf-isa-portfolio/
 ├── .env / .env.example          # Data provider config
 │
 ├── notebooks/                   # Chapter notebooks (executed in order)
-│   ├── 01_data_collection.ipynb  # Scrapes equity, bonds, preciousMetals, commodities
-│   ├── 02_etf_screening.ipynb    # Screens all 4 asset classes, writes to DB
-│   ├── 03_portfolio_construction.ipynb  # 4-class weights, versioning, DB save
-│   └── 04_performance_tracking.ipynb    # Loads from DB, tracks P&L
+│   ├── 01_data_collection.ipynb        # Scrapes equity, bonds, preciousMetals, commodities
+│   ├── 02_etf_screening.ipynb          # Screens all 4 asset classes, writes to DB
+│   ├── 03_portfolio_construction.ipynb # 4-class weights, versioning, DB save
+│   ├── 04_performance_tracking.ipynb   # Live multi-tenor TWR/MWR from DB + IE statements
+│   └── 05_backtesting.ipynb            # Historical backtest (FY25) + 2025-vs-2026 counterfactual
 │
 ├── data/
 │   ├── raw/                     # JustETF scrape outputs (justetf_class-*.csv)
@@ -91,7 +92,8 @@ etf-isa-portfolio/
                    → 02_etf_screening → screened_etfs table + summary_*.csv backups
                    → 03_portfolio_construction → portfolios table (year=2026)
                                                + final_portfolio.csv backup
-                   → 04_performance_tracking (loads from DB year=2026)
+                   → 04_performance_tracking (live multi-tenor P&L from DB + IE statements)
+                   → 05_backtesting         (FY25 actual + 2025-vs-2026 counterfactual)
 ```
 
 ## etf_utils Module Index

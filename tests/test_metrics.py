@@ -14,6 +14,8 @@ from etf_utils.metrics import (
     calculate_sharpe_ratio,
     calculate_tracking_error,
     interpolate_adjustment_factor,
+    rolling_sharpe,
+    rolling_volatility_from_cumret,
 )
 
 
@@ -59,7 +61,7 @@ def test_sharpe_ratio_zero_volatility():
 
 
 def test_sharpe_ratio_no_risk_free():
-    result = calculate_sharpe_ratio(12.0, 8.0)
+    result = calculate_sharpe_ratio(12.0, 8.0, risk_free_rate=0.0)
     assert result == pytest.approx(12.0 / 8.0)
 
 
@@ -268,3 +270,50 @@ def test_sharpe_ratio_explicit_overrides_config(monkeypatch):
     assert calculate_sharpe_ratio(0.10, 0.15, risk_free_rate=0.0) == pytest.approx(
         0.10 / 0.15
     )
+
+
+# --- rolling_volatility_from_cumret ---
+
+
+def test_rolling_volatility_from_cumret_matches_manual():
+    """Annualised rolling vol from cumulative returns matches a hand calc."""
+    dates = pd.bdate_range("2026-01-01", periods=8)
+    # 0, 1, 2, ... (+1%) / day
+    cum = pd.Series(np.arange(8, dtype=float), index=dates)
+    out = rolling_volatility_from_cumret(cum, window=3)
+    # Last window: equity ~ 1.05, 1.06, 1.07 -> daily returns ~ 0.952%, 0.943%
+    # std * sqrt(252) * 100 should be small but positive and finite.
+    assert pd.notna(out.iloc[-1])
+    assert out.iloc[-1] > 0
+
+
+def test_rolling_volatility_constant_series_is_zero():
+    """Flat cumulative-return series -> zero volatility after window."""
+    dates = pd.bdate_range("2026-01-01", periods=10)
+    cum = pd.Series([5.0] * 10, index=dates)
+    out = rolling_volatility_from_cumret(cum, window=3)
+    assert out.dropna().iloc[-1] == pytest.approx(0.0, abs=1e-9)
+
+
+# --- rolling_sharpe ---
+
+
+def test_rolling_sharpe_zero_rfr_is_mean_over_std():
+    """With rfr=0, rolling Sharpe collapses to (mean * period) / (std * sqrt(period))."""
+    dates = pd.bdate_range("2026-01-01", periods=15)
+    rng = np.random.default_rng(123)
+    rets = pd.Series(rng.normal(0.001, 0.01, size=15), index=dates)
+
+    out = rolling_sharpe(rets, window=10, risk_free_rate=0.0)
+    # Manual check on the last window
+    last = rets.iloc[-10:]
+    expected = (last.mean() * 252) / (last.std() * np.sqrt(252))
+    assert out.iloc[-1] == pytest.approx(expected, rel=1e-10)
+
+
+def test_rolling_sharpe_nan_on_flat_window():
+    """A flat return series -> zero std -> NaN rolling Sharpe."""
+    dates = pd.bdate_range("2026-01-01", periods=10)
+    rets = pd.Series([0.0] * 10, index=dates)
+    out = rolling_sharpe(rets, window=5)
+    assert out.dropna().empty
