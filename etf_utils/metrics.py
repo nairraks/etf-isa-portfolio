@@ -54,7 +54,18 @@ def calculate_dynamic_rfr(
         start_date: Start of the compounding period (inclusive).
         end_date: End of the compounding period (inclusive).
     """
-    subset = rate_series.loc[str(start_date):str(end_date)].dropna()
+    if rate_series.empty:
+        return float("nan")
+
+    rates = rate_series.copy()
+    if not isinstance(rates.index, pd.DatetimeIndex):
+        rates.index = pd.to_datetime(rates.index, errors="coerce")
+        rates = rates[~rates.index.isna()]
+        if rates.empty:
+            return float("nan")
+
+    rates = rates.sort_index()
+    subset = rates.loc[str(start_date):str(end_date)].dropna()
     if subset.empty:
         return float("nan")
 
