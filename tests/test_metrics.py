@@ -8,6 +8,7 @@ from etf_utils.metrics import (
     calculate_annualized_volatility,
     calculate_beta,
     calculate_daily_pnl,
+    calculate_dynamic_rfr,
     calculate_information_ratio,
     calculate_max_drawdown,
     calculate_period_metrics,
@@ -16,7 +17,6 @@ from etf_utils.metrics import (
     interpolate_adjustment_factor,
     rolling_sharpe,
     rolling_volatility_from_cumret,
-    calculate_dynamic_rfr,
 )
 
 
@@ -52,12 +52,12 @@ def test_annualized_volatility_too_few_observations():
 
 def test_calculate_dynamic_rfr_basic():
     dates = pd.bdate_range("2024-01-01", "2024-12-31")
-    # Constant 3.65% annualized rate -> expected annualized return is ~3.65%.
+    # Constant rate over a full tenor should stay close to the quoted base rate.
     rate_series = pd.Series([3.65] * len(dates), index=dates)
 
     rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-12-31")
     assert isinstance(rfr, float)
-    assert rfr == pytest.approx(0.0365, abs=1e-3)
+    assert rfr == pytest.approx(3.65, abs=0.1)
 
 def test_calculate_dynamic_rfr_empty():
     dates = pd.bdate_range("2024-01-01", "2024-01-10")
@@ -74,8 +74,16 @@ def test_calculate_dynamic_rfr_single_day():
     dates = pd.bdate_range("2024-01-01", "2024-01-01")
     rate_series = pd.Series([3.65], index=dates)
     rfr = calculate_dynamic_rfr(rate_series, "2024-01-01", "2024-01-01")
-    # n_days = 0, should return NaN
-    assert np.isnan(rfr)
+    assert rfr > 0
+
+
+def test_calculate_dynamic_rfr_accrues_over_weekend():
+    rate_series = pd.Series(
+        [3.65, 3.65],
+        index=pd.DatetimeIndex(["2024-01-05", "2024-01-08"]),
+    )
+    rfr = calculate_dynamic_rfr(rate_series, "2024-01-05", "2024-01-07")
+    assert rfr == pytest.approx(3.65, abs=0.1)
 
 # --- calculate_sharpe_ratio ---
 

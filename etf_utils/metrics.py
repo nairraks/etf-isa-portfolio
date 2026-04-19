@@ -50,11 +50,16 @@ def calculate_dynamic_rfr(
 
     Args:
         rate_series: Series of daily annualized rates (as a percentage, e.g. 4.0).
-                     The series must be indexed by Datetime.
+                     Index values are coerced to Datetime and sorted.
         start_date: Start of the compounding period (inclusive).
         end_date: End of the compounding period (inclusive).
     """
     if rate_series.empty:
+        return float("nan")
+
+    start_ts = pd.to_datetime(start_date)
+    end_ts = pd.to_datetime(end_date)
+    if end_ts < start_ts:
         return float("nan")
 
     rates = rate_series.copy()
@@ -64,21 +69,23 @@ def calculate_dynamic_rfr(
         if rates.empty:
             return float("nan")
 
-    rates = rates.sort_index()
-    subset = rates.loc[str(start_date):str(end_date)].dropna()
-    if subset.empty:
+    rates = rates.sort_index().dropna()
+    observed = rates.loc[:end_ts]
+    if observed.empty:
+        return float("nan")
+
+    calendar_index = pd.date_range(start=start_ts, end=end_ts, freq="D")
+    calendar_rates = observed.reindex(calendar_index).ffill()
+    if calendar_rates.isna().any():
         return float("nan")
 
     # SONIA standard actual/365 compounding convention
-    daily_yields = subset / 100.0 / 365.0
+    daily_yields = calendar_rates / 100.0 / 365.0
 
     total_return = float((1 + daily_yields).prod()) - 1.0
 
-    # Calculate actual calendar days spanned
-    n_days = (pd.to_datetime(end_date) - pd.to_datetime(start_date)).days
-    if n_days <= 0:
-        return float("nan")
-
+    # Annualize using the same inclusive calendar-day accrual count.
+    n_days = len(calendar_rates)
     annualized_return = ((1.0 + total_return) ** (365.0 / n_days) - 1.0) * 100.0
     return float(annualized_return)
 
