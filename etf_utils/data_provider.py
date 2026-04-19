@@ -82,8 +82,7 @@ class DataProvider:
             yf.set_tz_cache_location(str(cache_dir))
         except Exception:
             try:
-                temp_cache = Path(tempfile.gettempdir()) / "etf_yf_cache"
-                temp_cache.mkdir(parents=True, exist_ok=True)
+                temp_cache = Path(tempfile.mkdtemp(prefix="etf_yf_cache_"))
                 yf.set_tz_cache_location(str(temp_cache))
             except Exception:
                 pass

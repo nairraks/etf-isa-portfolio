@@ -354,7 +354,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "jupyter-book", specifier = ">=1.0.0,<2.0.0" },
-    { name = "justetf-scraping", git = "https://github.com/nairraks/justetf-scraping.git" },
+    { name = "justetf-scraping", git = "https://github.com/nairraks/justetf-scraping.git?rev=8afe2d9093b59e7ffc138aa19622d1ee202d4776" },
     { name = "matplotlib", specifier = ">=3.5.0" },
     { name = "numpy", specifier = ">=1.21.0" },
     { name = "pandas", specifier = ">=2.0.0" },
@@ -695,7 +695,7 @@ wheels = [
 [[package]]
 name = "justetf-scraping"
 version = "0.1.0"
-source = { git = "https://github.com/nairraks/justetf-scraping.git#8afe2d9093b59e7ffc138aa19622d1ee202d4776" }
+source = { git = "https://github.com/nairraks/justetf-scraping.git?rev=8afe2d9093b59e7ffc138aa19622d1ee202d4776#8afe2d9093b59e7ffc138aa19622d1ee202d4776" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "pandas" },

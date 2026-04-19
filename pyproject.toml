@@ -14,7 +14,7 @@ dependencies = [
     "scipy>=1.10.0",
     "seaborn>=0.13.0",
     "yfinance>=0.2.0",
-    "justetf-scraping @ git+https://github.com/nairraks/justetf-scraping.git",
+    "justetf-scraping @ git+https://github.com/nairraks/justetf-scraping.git@8afe2d9093b59e7ffc138aa19622d1ee202d4776",
 ]
 
 [dependency-groups]
