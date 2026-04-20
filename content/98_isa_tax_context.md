@@ -55,7 +55,7 @@ on the sell leg.
 
 ## What the book ignores
 
-All returns reported in the notebooks are computed **net of fund TER only**.
+All returns reported in the notebooks are computed **net of fund [TER](99_glossary.md#costs) only**.
 The figures do not account for platform fees (InvestEngine and Trading212
 are currently free for ETF trading), dealing spreads, or tax on any cash
 held outside the wrapper. In an ISA, tax on the wrapped assets is nil, so

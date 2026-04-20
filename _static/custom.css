@@ -1,0 +1,95 @@
+/* Custom styles for the DIY ETF ISA Portfolio Guide.
+   Goal: make the boundary between prose and code/output blocks immediately
+   clear on both screen and printed (A4) views. */
+
+/* ── Code cells (inputs) ─────────────────────────────────────────────── */
+div.cell_input,
+.highlight pre {
+    background-color: #f6f8fa !important;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 0.75em 1em;
+}
+
+/* ── Code cell outputs (stdout/stderr text, print() results) ─────────── */
+div.cell_output .output pre,
+div.cell_output pre,
+div.cell_output .output.output_stream {
+    background-color: #f6f8fa !important;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 0.75em 1em;
+}
+
+/* ── DataFrame / HTML table outputs ──────────────────────────────────── */
+div.cell_output table.dataframe {
+    background-color: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    font-size: 0.88em;
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    max-width: 100%;
+    overflow-x: auto;
+    display: block;
+}
+
+div.cell_output table.dataframe thead th {
+    background-color: #e9ecef;
+    color: #1f2937;
+    font-weight: 600;
+    border-bottom: 2px solid #cbd5e0;
+    padding: 6px 10px;
+    text-align: right;
+}
+
+div.cell_output table.dataframe tbody tr:nth-child(even) {
+    background-color: #ffffff;
+}
+
+div.cell_output table.dataframe tbody tr:nth-child(odd) {
+    background-color: #f6f8fa;
+}
+
+div.cell_output table.dataframe td,
+div.cell_output table.dataframe th {
+    padding: 5px 10px;
+    border: none;
+}
+
+/* ── Wrap image outputs (matplotlib / heatmaps) for responsiveness ──── */
+div.cell_output img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ── Admonitions keep their existing colouring; no override ─────────── */
+
+/* ── Print / A4-specific adjustments ─────────────────────────────────── */
+@media print {
+    div.cell_input,
+    div.cell_output pre,
+    div.cell_output table.dataframe {
+        background-color: #f6f8fa !important;
+        border-color: #aab0b6 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* Heatmaps and wide plots tend to overflow A4 portrait — shrink to fit */
+    div.cell_output img {
+        max-width: 100% !important;
+        page-break-inside: avoid;
+    }
+}
+
+/* ── Mobile (narrow viewport) table handling ─────────────────────────── */
+@media (max-width: 768px) {
+    div.cell_output table.dataframe {
+        font-size: 0.78em;
+    }
+    div.cell_output table.dataframe td,
+    div.cell_output table.dataframe th {
+        padding: 3px 6px;
+    }
+}
