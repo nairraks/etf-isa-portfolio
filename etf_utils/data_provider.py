@@ -203,7 +203,6 @@ class DataProvider:
                 result = result[result.index <= pd.to_datetime(end_date)]
             return result
 
-        # --- EXISTING INTERCEPTS ---
         FALLBACK_TICKERS = ["IMIB"]
         if self.provider == "yfinance" and symbol in FALLBACK_TICKERS:
             from pathlib import Path
