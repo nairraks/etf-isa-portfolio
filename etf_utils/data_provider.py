@@ -204,6 +204,40 @@ class DataProvider:
             return result
 
         # --- EXISTING INTERCEPTS ---
+        # Tickers only available on yfinance (not AlphaVantage).
+        # These are fetched via yfinance directly and never fall through to AV.
+        YFINANCE_ONLY_TICKERS = {
+            "ISF.L",   # iShares Core FTSE 100 — AV doesn't support ISF.LON
+            "CS51.L",  # iShares Core EURO STOXX 50
+            "XDJP.L",  # Xtrackers Nikkei 225
+            "IBZL.L",  # iShares MSCI Brazil (benchmark variant)
+        }
+        if symbol in YFINANCE_ONLY_TICKERS or symbol.upper() in {t.upper() for t in YFINANCE_ONLY_TICKERS}:
+            sym = _normalize_symbol(symbol, "yfinance")
+            kwargs = {"progress": False, "auto_adjust": True}
+            if start_date:
+                kwargs["start"] = start_date
+            if end_date:
+                end_dt = pd.to_datetime(end_date) + pd.Timedelta(days=1)
+                kwargs["end"] = end_dt.strftime("%Y-%m-%d")
+            if not start_date and not end_date:
+                kwargs["period"] = "max"
+            df = yf.download(sym, **kwargs)
+            if df.empty:
+                raise ValueError(f"No yfinance data for yfinance-only symbol {sym!r}")
+            close = df["Close"]
+            if hasattr(close, "columns"):
+                close = close.iloc[:, 0]
+            result = close.to_frame(name="close")
+            result.index = pd.to_datetime(result.index)
+            if result.index.tz is not None:
+                result.index = result.index.tz_localize(None)
+            result = result.sort_index()
+            result = self._normalize_pence_to_pounds(result, sym)
+            if not start_date and not end_date:
+                self._price_cache[cache_key] = result
+            return result
+
         FALLBACK_TICKERS = ["IMIB"]
         if self.provider == "yfinance" and symbol in FALLBACK_TICKERS:
             from pathlib import Path
