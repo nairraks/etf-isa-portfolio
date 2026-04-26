@@ -1,14 +1,15 @@
-# For Newcomers: The 5-Minute Primer
+# For Newcomers: the 5-Minute Primer
 
-New to investing? This one page is all you need before the rest of the book
-makes sense. Nothing here is financial advice — just definitions.
+New to investing? This one page is all the background you need before the rest
+of the book makes sense. Nothing here is financial advice — just definitions.
 
 ## What is an ETF?
 
 An **Exchange-Traded Fund (ETF)** is a single fund that holds many stocks,
-bonds, or commodities, and trades on a stock exchange like a share. Buying one
+bonds or commodities and trades on a stock exchange like a share. Buying one
 unit of a global equity ETF like Vanguard FTSE All-World (`VWRL`) gives you
-fractional exposure to ~3,600 companies across 47 countries in a single trade.
+fractional exposure to around 3,600 companies across 47 countries in a single
+trade.
 
 Think of it as a ready-made basket: instead of picking individual stocks, you
 buy the whole market.
@@ -24,56 +25,47 @@ is a UCITS ETF — the label is a safety standard, not a brand.
 
 An **Individual Savings Account (ISA)** is a UK tax wrapper that shields
 investments from income tax and capital gains tax. The allowance is
-**£20,000 per tax year** (as of 2025/26; verify the current figure at
+**£20,000 per tax year** (2025/26 figure — verify at
 [gov.uk](https://www.gov.uk/individual-savings-accounts)).
 
-A **Stocks & Shares ISA** lets you hold ETFs inside the wrapper — dividends
-and capital gains accumulate tax-free while the wrapper stays open.
+A **Stocks & Shares ISA** lets you hold ETFs inside the wrapper; dividends and
+capital gains accumulate tax-free while the wrapper stays open.
 
 See [ISA Tax Context](98_isa_tax_context.md) for a slightly fuller reference.
 
-## Distributing vs Accumulating
+## Distributing vs accumulating
 
-- **Distributing ETF**: pays dividends out to your account as cash (you can
-  reinvest or withdraw).
-- **Accumulating ETF**: reinvests dividends inside the fund — the unit price
-  just rises.
+- **[Distributing](99_glossary.md#wrappers-product-types) ETF** — pays dividends out
+  to your account as cash (you can reinvest or withdraw).
+- **[Accumulating](99_glossary.md#wrappers-product-types) ETF** — reinvests dividends
+  inside the fund; the unit price just rises.
 
-Both are valid. This book's equity and bond picks are **distributing** (for
-income/flexibility); the commodity and precious-metals picks can be
-accumulating because they don't pay meaningful yields.
+Both are valid. This book's equity and bond picks are **distributing** (the
+cash is what funds the annual rebalance). Commodity and precious-metal picks
+can be accumulating because they rarely pay meaningful yields.
 
 ## TER / OCF
 
-The **Total Expense Ratio (TER)** — also called the **Ongoing Charges Figure
-(OCF)** — is the annual percentage the fund manager deducts from the fund's
-assets to pay management and operating costs. 0.07% is cheap; 0.50% is the
-upper end of what this book considers acceptable. TER and OCF are effectively
-the same number for UCITS ETFs.
+The **[Total Expense Ratio (TER)](99_glossary.md#costs)** — also called the
+**Ongoing Charges Figure (OCF)** — is the annual percentage the fund manager
+deducts from the fund's assets to cover management and operating costs.
+0.07% is cheap; 0.50% is the upper end of what this book considers
+acceptable. TER and OCF are effectively the same number for
+[UCITS](99_glossary.md#wrappers-product-types) ETFs.
 
 ## What this book does
 
-Scrapes the UK ETF universe from [JustETF](https://www.justetf.com), filters
-it by size / cost / quality / broker availability, ranks the survivors by
-risk-adjusted returns, and produces a systematic portfolio across four asset
-classes (equities, bonds, precious metals, commodities).
+- **Selects** a shortlist of UK-available UCITS ETFs by size, cost, quality
+  and broker availability.
+- **Constructs** a four-asset-class portfolio (equities, bonds, precious
+  metals, commodities), weighted by risk-adjusted returns.
+- **Tracks** live performance against a blended benchmark.
+- **Backtests** the approach over the most recent UK tax year.
 
-You can run the same code, edit the parameters, and build your own.
-
-## Where the data comes from
-
-Three tools, three jobs — listed here so you're not surprised later:
-
-- **[JustETF](https://www.justetf.com)** — for *information about ETFs*:
-  ticker, TER, fund size, whether it's distributing, which index it tracks.
-- **[AlphaVantage](https://www.alphavantage.co)** — for *historical price
-  data* (the numbers behind every Sharpe ratio, drawdown and return chart).
-  A [yfinance](https://pypi.org/project/yfinance/) fallback is available if
-  you'd rather not sign up for a free AlphaVantage key.
-- **InvestEngine** or **Trading212** — for *actually buying the ETFs* inside
-  a UK Stocks & Shares ISA. Both are zero-fee for ETF trading.
-
-The [Methodology](00b_methodology.md) page has the full table.
+The guiding philosophy is **constant-mix
+[rebalancing](99_glossary.md#pipeline-terms)**: fixed target weights held
+through thick and thin, rebalanced annually with the fresh ISA allowance.
+The rest of the book is the detail behind that one sentence.
 
 ## Glossary
 

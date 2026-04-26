@@ -1,189 +1,136 @@
 # DIY ETF ISA Portfolio Guide
 
-A practical guide to building a systematic, low-cost ETF portfolio in a UK ISA account.
+A practical guide to building a systematic, low-cost ETF portfolio in a UK
+Stocks & Shares ISA — written for a do-it-yourself investor who wants the
+*why* behind every weight, not just a ticker list.
 
 ```{admonition} New here?
 :class: tip
 
-Start with [For Newcomers](content/00a_for_newcomers.md) for a 5-minute
-primer on ETFs, ISAs, and the terminology used throughout the book.
-Every technical term is defined in the [Glossary](content/99_glossary.md);
-every assumption is spelled out in [Methodology & Assumptions](content/00b_methodology.md).
+Start with [For Newcomers](content/00a_for_newcomers.md) for a five-minute
+primer on ETFs, ISAs and distributing funds. Every technical term is defined
+in the [Glossary](content/99_glossary.md); every assumption is spelled out in
+[Methodology & Assumptions](content/00b_methodology.md).
 ```
 
-## What This Is
+## Investment philosophy — constant-mix with annual rebalancing
 
-A data-driven approach to ETF investing built on three clearly-separated
-tools: **JustETF** for ETF information, **AlphaVantage** for historical price
-data, and **InvestEngine or Trading212** for actual order execution inside a
-UK ISA. See the [Data Sources & Platforms](#data-sources-and-platforms)
-section below for the full breakdown.
+This book follows a **constant-mix strategy**: set a long-term target weight
+per asset class, then **rebalance back to target** at the start of every UK
+tax year (6 April) when the fresh £20,000 ISA allowance becomes available.
 
-## Data Sources and Platforms
+Why constant-mix?
 
-Three distinct layers — don't conflate them:
+- **Mechanically buys low and sells high.** When equities rip, rebalancing
+  trims them back to target and tops up whatever has lagged. When they
+  drawdown, rebalancing buys the discount. It imposes discipline that a
+  discretionary investor rarely sustains on their own.
+- **Harvests the "rebalancing bonus"** from components that are *volatile but
+  lowly correlated*. Precious metals and broad commodities are in the 2026
+  portfolio precisely for this reason: not because they out-return equities,
+  but because they zig when equities zag.
+- **Cheap, tax-efficient and sleep-friendly.** One decision a year. Inside an
+  ISA, sales trigger no CGT; zero-fee brokers mean no trading costs. The
+  strategy is dominated by *what you don't do* — no market timing, no
+  fund-picking churn.
 
-| Layer | Tool | What it provides |
-|---|---|---|
-| **ETF information** | [JustETF](https://www.justetf.com) via the `justetf-scraping` fork | Ticker universe, TER, fund size, domicile, distribution policy, replication method, benchmark index |
-| **Historical prices (all numbers)** | [AlphaVantage](https://www.alphavantage.co) (primary); [yfinance](https://pypi.org/project/yfinance/) (fallback) | Daily adjusted-close series used for Sharpe, beta, drawdown, TWR and every numerical result reported in the notebooks |
-| **Order execution** | **InvestEngine or Trading212** | The actual UK ISA account used to buy and hold the selected ETFs |
+```{admonition} Constant-mix vs drift
+:class: note
 
-**Which source drives the numbers?** **AlphaVantage.** Every quantitative
-figure in the book is computed from AlphaVantage's adjusted-close series —
-it handles corporate actions more consistently for LSE listings than the
-free alternatives. A yfinance code path exists as a no-API-key fallback for
-quick exploration (toggle via `DATA_PROVIDER=yfinance` in `.env`), but the
-book's reported numbers come from AlphaVantage. Get a free key at
-<https://www.alphavantage.co/support/#api-key>.
-
-**JustETF is strictly for ETF attributes**, not prices. TER, fund size,
-distribution policy and every screening filter input originate from
-JustETF. The `justetf-scraping` library is a [fork from
-`nairraks`](https://github.com/nairraks/justetf-scraping) (not the upstream
-`druzsan`).
-
-**InvestEngine or Trading212 are execution-only**, and the screener is
-broker-agnostic: `check_platform()` in `etf_utils/platform_check.py`
-queries InvestEngine first, then falls back to Trading212 if you've set
-`TRADING212_API_KEY` and `TRADING212_API_SECRET` in `.env`. Both are
-zero-fee for ETF trading in a UK ISA. The final `platform` column in the
-portfolio table records which broker was matched for each ticker.
-
-No Bloomberg, no Morningstar, no paid feeds — every number in the book is
-reproducible from the three tools above.
-
-## Investment Approach
-
-The portfolio targets **distributing (income) UCITS ETFs** across four asset classes, weighted by a composite Sharpe ratio score:
-
-| Asset Class | Target Weight | Benchmark |
-|---|---|---|
-| Equities | 65% | VEVE.L (Vanguard FTSE Dev World) |
-| Bonds | 10% | SAAA.L (SPDR Bloomberg 0–3Y US Agg) |
-| Precious Metals | 5% | SGLN.L (iShares Physical Gold ETC) |
-| Commodities | 10% | CMOP.L (Invesco Bloomberg Commodity) |
-
-ETFs are ranked per region using a weighted composite of risk-adjusted returns:
-- 50% weight on 1-year risk-adjusted return
-- 30% weight on 3-year risk-adjusted return
-- 20% weight on 5-year risk-adjusted return
-
-Weights are then adjusted up or down based on each asset class's Sharpe ratio relative to its benchmark, and normalised to sum to 100%.
-
-## How the Portfolio Is Built
-
-```
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  STEP 1 — DATA COLLECTION  (notebook 01)                                     │
-│  "Cast the net — gather every ETF available"                                 │
-│                                                                              │
-│  JustETF website                                                             │
-│       ├──▶  Equities         (683 UK · 142 APAC · 88 EMEA · 94 Emerging)    │
-│       ├──▶  Bonds            (537 UK · 424 EMEA · 30 Emerging)              │
-│       ├──▶  Precious Metals  (52 ETCs globally)                              │
-│       └──▶  Commodities      (121 ETCs globally)                            │
-│                                                                              │
-│  Output: raw CSV files saved to data/raw/                                   │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  STEP 2 — ETF SCREENING  (notebook 02)                                       │
-│  "Pick only the best — filter out the noise"                                 │
-│                                                                              │
-│  Equities & Bonds:                    Precious Metals:                       │
-│  ✓ Distributing (pays dividends)      ✓ Size > £100M                        │
-│  ✓ Size > £100M                       ✓ TER < 0.60%                         │
-│  ✓ TER < 0.50%                        ✓ Not currency-hedged                 │
-│  ✓ Beta ≥ 1 vs. 2025 benchmark        ✓ On InvestEngine or Trading212       │
-│  ✓ On InvestEngine or Trading212      ✓ Overlap-aware: prefer platinum &     │
-│                                         palladium (0% in BCOM index) over   │
-│                                         silver (4.49%) and gold (14.29%)    │
-│                                       ✓ Metal diversity: one ETC per metal  │
-│                                                                              │
-│  Commodities:                                                                │
-│  ✓ Size > £100M  ✓ TER < 0.60%  ✓ Not hedged                               │
-│  ✓ Beta ≥ 1 vs. 2025 CMOP benchmark                                         │
-│  ✓ On InvestEngine or Trading212 (keeps broad diversified ETCs only)        │
-│                                                                              │
-│  Output: ~14 shortlisted ETFs saved to database                             │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  STEP 3 — PORTFOLIO CONSTRUCTION  (notebook 03)                              │
-│  "Decide how much money goes where"                                          │
-│                                                                              │
-│  ① Start with strategic target weights:                                      │
-│     Equities    65% ────────────────────────────────────────────────────    │
-│     Bonds       10% ──────                                                   │
-│     Gold         5% ───                                                      │
-│     Commodities 10% ──────                                                   │
-│                                                                              │
-│  ② Adjust weights based on Sharpe ratio vs. benchmark:                       │
-│     Better than benchmark → weight UP   (up to ×1.48)                       │
-│     Worse than benchmark  → weight DOWN (down to ×0.60)                     │
-│                                                                              │
-│  ③ Normalise adjusted weights to sum to 100%                                 │
-│                                                                              │
-│  ④ Reduce weight of volatile assets (volatility adjustment)                  │
-│                                                                              │
-│  Output: final_portfolio.csv  (e.g. £20,000 split across ~14 ETFs)         │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  STEP 4 — PERFORMANCE TRACKING  (notebook 04)                                │
-│  "Watch how your investment grows over time"                                 │
-│                                                                              │
-│  • Fetch latest prices for all held ETFs                                     │
-│  • Calculate daily profit & loss (P&L) per position                         │
-│  • Compare total return vs. benchmark (VEVE)                                │
-│  • Track cumulative return since portfolio start                             │
-│                                                                              │
-│  Monitor: track total return vs. benchmarks over time                       │
-└──────────────────────────────────────────────────────────────────────────────┘
-                                    │
-                                    ▼
-┌──────────────────────────────────────────────────────────────────────────────┐
-│  STEP 5 — BACKTESTING  (notebook 05)                                         │
-│  "How would this portfolio have performed last year?"                        │
-│                                                                              │
-│  • Replay the 2025 portfolio over FY25 using real trade ledger              │
-│  • Counterfactual: how would the 2026 weights have performed over FY25?     │
-│  • Compare TWR / MWR / Sharpe / max drawdown vs. blended benchmark          │
-│                                                                              │
-│  Sanity check: ground the 2026 portfolio in realised FY25 behaviour         │
-└──────────────────────────────────────────────────────────────────────────────┘
+A portfolio that is never touched drifts toward whatever is winning. After a
+ten-year equity bull run the bond sleeve shrinks to a rounding error — exactly
+when you need it most. Constant-mix prevents that silent concentration.
 ```
 
-## Browse the Notebooks
+## The portfolio in one table
+
+Target weights for the 2026 portfolio:
+
+| Asset class | Target | Benchmark | Role |
+|---|---|---|---|
+| Equities | **65%** | VEVE.L | Long-run return engine |
+| Bonds | **20%** | SAAA.L | Ballast + rebalancing reserve |
+| Precious metals | **5%** | SGLN.L | Crisis hedge, low equity correlation |
+| Commodities | **10%** | CMOP.L | Inflation hedge, diversifier |
+
+Within each class, ETFs are ranked by a composite risk-adjusted-return score
+(see [Methodology](content/00b_methodology.md#sharpe-based-weighting)) and
+weights are tilted toward the better performers. Everything is
+[**distributing**](content/99_glossary.md#wrappers-product-types)
+[**UCITS**](content/99_glossary.md#wrappers-product-types) for the equity and bond
+sleeves, so dividends arrive as cash and fund the next rebalance.
+
+## How the portfolio is built — three steps
+
+The book is structured around three investor decisions, supported by a
+backtest that grounds them in realised data.
+
+```
+┌────────────────────────────────────────────────────────────────────┐
+│  STEP 1  —  SELECTION                                              │
+│  "Which ETFs even deserve a look?"                                 │
+│                                                                    │
+│  Start from every UCITS ETF available in the UK, then filter:      │
+│    • Distributing (equities & bonds)                               │
+│    • Size ≥ £100M  •  TER < 0.50–0.60%                             │
+│    • Tracks its asset class (beta check)                           │
+│    • Buyable on a zero-fee UK ISA broker                           │
+│                                                                    │
+│  Rank the survivors by a composite                                  │
+│  [Sharpe ratio](content/99_glossary.md#risk-metrics)               │
+│  (50% 1-yr · 30% 3-yr · 20% 5-yr).                                 │
+└────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  STEP 2  —  PORTFOLIO CONSTRUCTION                                 │
+│  "How much money goes where?"                                      │
+│                                                                    │
+│    ① Strategic mix: 65 / 20 / 5 / 10                                │
+│    ② Tilt each ETF's weight by [Sharpe](content/99_glossary.md#risk-metrics) vs class median│
+│         (×0.60 weak → ×1.48 strong)                                │
+│    ③ Shrink high-volatility names                                   │
+│    ④ Normalise to 100% and allocate the ISA's £20,000               │
+└────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  STEP 3  —  PERFORMANCE TRACKING                                   │
+│  "Is this actually working?"                                       │
+│                                                                    │
+│    • [TWR](content/99_glossary.md#return-metrics) / [MWR](content/99_glossary.md#future-metrics-not-yet-in-the-book) across three tenors (Overall · FY25 · FY26) │
+│    • Rolling volatility & Sharpe vs a blended benchmark            │
+│    • Holdings snapshot with per-position P&L                       │
+└────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌────────────────────────────────────────────────────────────────────┐
+│  BACKTEST  —  GROUND TRUTH                                         │
+│  "Would this have worked over last tax year?"                      │
+│                                                                    │
+│  Replay the 2025 portfolio over FY25 using the real trade ledger,  │
+│  then ask the counterfactual: how would the 2026 weights (with     │
+│  metals + commodities added) have behaved across the same window?  │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+## Browse the chapters
 
 ```{tableofcontents}
 ```
 
-## Quick Start
-
-```bash
-git clone https://github.com/nairraks/etf-isa-portfolio
-cd etf-isa-portfolio
-uv sync
-cp .env.example .env  # add your AlphaVantage key (+ FRED key for notebook 04 SONIA base rate)
-```
-
-Then run the notebooks in order (1 → 5) as described above. A free
-AlphaVantage key is the default; if you'd rather skip the signup, set
-`DATA_PROVIDER=yfinance` in `.env` to use the free fallback. Notebook 04's
-dynamic SONIA base-rate lookup uses `FRED_API_KEY`.
-
 ---
 
-> **Disclaimer**
+> **Disclaimer — this is NOT investment advice.**
 >
-> **This is NOT investment advice.** The content in this book is for educational and personal research purposes only. The author is not a financial adviser and nothing here constitutes a recommendation to buy, sell, or hold any security.
+> The content in this book is for educational and personal-research purposes
+> only. The author is not a financial adviser and nothing here constitutes a
+> recommendation to buy, sell or hold any security.
 >
-> - **You can lose money investing in financial markets.** The value of investments and the income from them can go down as well as up.
-> - **Past performance does not guarantee future results.** Historical returns shown in this book are no indication of what you will earn.
-> - **Do your own research.** Always consult a qualified, regulated financial adviser before making investment decisions.
-> - **The author accepts no liability** for any losses arising from the use of information in this book.
+> - **You can lose money investing.** Markets go down as well as up.
+> - **Past performance does not guarantee future results.** Every backtest is
+>   historical; none is a prediction.
+> - **Do your own research.** Always consult a qualified, regulated financial
+>   adviser before making investment decisions.
+> - **The author accepts no liability** for any losses arising from the use
+>   of information in this book.

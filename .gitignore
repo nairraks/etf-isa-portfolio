@@ -20,6 +20,7 @@ archive/
 data/raw/*.csv
 data/intermediate/*.csv
 data/output/final_portfolio.csv
+data/etf_portfolio.db
 
 # Broker statements — real account data, never commit
 data/investment_statements/
