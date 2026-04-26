@@ -76,8 +76,8 @@ backtest that grounds them in realised data.
 │    • Tracks its asset class (beta check)                           │
 │    • Buyable on a zero-fee UK ISA broker                           │
 │                                                                    │
-│  Rank the survivors by a composite                                  │
-│  risk-adjusted return score                                         │
+│  Rank the survivors by a composite                                 │
+│  risk-adjusted return score                                        │
 │  (50% 1-yr · 30% 3-yr · 20% 5-yr).                                 │
 └────────────────────────────────────────────────────────────────────┘
                               │
@@ -86,11 +86,11 @@ backtest that grounds them in realised data.
 │  STEP 2  —  PORTFOLIO CONSTRUCTION                                 │
 │  "How much money goes where?"                                      │
 │                                                                    │
-│    ① Strategic mix: 65 / 20 / 5 / 10                                │
+│    ① Strategic mix: 65 / 20 / 5 / 10                               │
 │    ② Tilt each ETF's weight by risk-adjusted return vs class median│
 │         (×0.60 weak → ×1.48 strong)                                │
-│    ③ Shrink high-volatility names                                   │
-│    ④ Normalise to 100% and allocate the ISA's £20,000               │
+│    ③ Shrink high-volatility names                                  │
+│    ④ Normalise to 100% and allocate the ISA's £20,000              │
 └────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -98,8 +98,8 @@ backtest that grounds them in realised data.
 │  STEP 3  —  PERFORMANCE TRACKING                                   │
 │  "Is this actually working?"                                       │
 │                                                                    │
-│    • TWR / MWR across three tenors (Overall · FY25 · FY26)          │
-│    • Rolling volatility & performance vs a blended benchmark        │
+│    • TWR / MWR across three tenors (Overall · FY25 · FY26)         │
+│    • Rolling volatility & performance vs a blended benchmark       │
 │    • Holdings snapshot with per-position P&L                       │
 └────────────────────────────────────────────────────────────────────┘
                               │
