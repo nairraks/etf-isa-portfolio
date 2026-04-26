@@ -22,7 +22,10 @@ div.cell_output .output.output_stream {
 }
 
 /* ── DataFrame / HTML table outputs ──────────────────────────────────── */
-div.cell_output table.dataframe {
+/* Plain `df` repr renders as `<table class="dataframe">`; pandas Styler
+   (`df.style...`) renders as `<table id="T_...">` with no class. Target both. */
+div.cell_output table.dataframe,
+div.cell_output table[id^="T_"] {
     background-color: #f6f8fa;
     border: 1px solid #e1e4e8;
     border-radius: 6px;
@@ -34,7 +37,8 @@ div.cell_output table.dataframe {
     display: block;
 }
 
-div.cell_output table.dataframe thead th {
+div.cell_output table.dataframe thead th,
+div.cell_output table[id^="T_"] thead th {
     background-color: #e9ecef;
     color: #1f2937;
     font-weight: 600;
@@ -43,16 +47,20 @@ div.cell_output table.dataframe thead th {
     text-align: right;
 }
 
-div.cell_output table.dataframe tbody tr:nth-child(even) {
+div.cell_output table.dataframe tbody tr:nth-child(even),
+div.cell_output table[id^="T_"] tbody tr:nth-child(even) {
     background-color: #ffffff;
 }
 
-div.cell_output table.dataframe tbody tr:nth-child(odd) {
+div.cell_output table.dataframe tbody tr:nth-child(odd),
+div.cell_output table[id^="T_"] tbody tr:nth-child(odd) {
     background-color: #f6f8fa;
 }
 
 div.cell_output table.dataframe td,
-div.cell_output table.dataframe th {
+div.cell_output table.dataframe th,
+div.cell_output table[id^="T_"] td,
+div.cell_output table[id^="T_"] th {
     padding: 5px 10px;
     border: none;
 }
@@ -69,7 +77,8 @@ div.cell_output img {
 @media print {
     div.cell_input,
     div.cell_output pre,
-    div.cell_output table.dataframe {
+    div.cell_output table.dataframe,
+    div.cell_output table[id^="T_"] {
         background-color: #f6f8fa !important;
         border-color: #aab0b6 !important;
         -webkit-print-color-adjust: exact;
@@ -85,11 +94,14 @@ div.cell_output img {
 
 /* ── Mobile (narrow viewport) table handling ─────────────────────────── */
 @media (max-width: 768px) {
-    div.cell_output table.dataframe {
+    div.cell_output table.dataframe,
+    div.cell_output table[id^="T_"] {
         font-size: 0.78em;
     }
     div.cell_output table.dataframe td,
-    div.cell_output table.dataframe th {
+    div.cell_output table.dataframe th,
+    div.cell_output table[id^="T_"] td,
+    div.cell_output table[id^="T_"] th {
         padding: 3px 6px;
     }
 }

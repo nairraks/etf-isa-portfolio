@@ -97,8 +97,8 @@ def test_get_asset_class_commodities_intermediate():
 
 def test_four_class_weight_normalization():
     """Normalized weights for 4 asset classes must sum to ~100."""
-    # Fixed inputs: 65 / 10 / 5 / 10
-    eq_risk, bnd_risk, pm_risk, cmd_risk = 65, 10, 5, 10
+    # Fixed inputs: 65 / 20 / 5 / 10
+    eq_risk, bnd_risk, pm_risk, cmd_risk = 65, 20, 5, 10
     # No Sharpe adjustment (factors = 1.0)
     adjs = [w * 1.0 for w in (eq_risk, bnd_risk, pm_risk, cmd_risk)]
     total = sum(adjs)

@@ -49,7 +49,7 @@ Target weights for the 2026 portfolio:
 | Asset class | Target | Benchmark | Role |
 |---|---|---|---|
 | Equities | **65%** | VEVE.L | Long-run return engine |
-| Bonds | **10%** | SAAA.L | Ballast + rebalancing reserve |
+| Bonds | **20%** | SAAA.L | Ballast + rebalancing reserve |
 | Precious metals | **5%** | SGLN.L | Crisis hedge, low equity correlation |
 | Commodities | **10%** | CMOP.L | Inflation hedge, diversifier |
 
@@ -86,8 +86,8 @@ backtest that grounds them in realised data.
 │  STEP 2  —  PORTFOLIO CONSTRUCTION                                 │
 │  "How much money goes where?"                                      │
 │                                                                    │
-│    ① Strategic mix: 65 / 10 / 5 / 10                                │
-│    ② Tilt each ETF's weight by [Sharpe](content/99_glossary.md#risk-metrics) vs its benchmark │
+│    ① Strategic mix: 65 / 20 / 5 / 10                                │
+│    ② Tilt each ETF's weight by [Sharpe](content/99_glossary.md#risk-metrics) vs class median│
 │         (×0.60 weak → ×1.48 strong)                                │
 │    ③ Shrink high-volatility names                                   │
 │    ④ Normalise to 100% and allocate the ISA's £20,000               │
