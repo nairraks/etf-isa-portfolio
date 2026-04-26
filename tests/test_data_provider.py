@@ -83,6 +83,38 @@ def test_get_historical_prices_empty_raises(mock_download, mock_get):
         provider.get_historical_prices("FAKE")
 
 
+@patch("etf_utils.data_provider.requests.get")
+@patch("etf_utils.data_provider.yf.download")
+def test_alphavantage_fallback_cache_stores_full_history(mock_download, mock_get):
+    """A bounded fallback call must not poison cache for later unbounded calls."""
+    mock_download.return_value = pd.DataFrame()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "Time Series (Daily)": {
+            "2024-01-02": {"5. adjusted close": "100.0"},
+            "2024-01-03": {"5. adjusted close": "101.0"},
+            "2024-01-04": {"5. adjusted close": "102.0"},
+        }
+    }
+    mock_get.return_value = mock_response
+
+    provider = DataProvider(provider="yfinance")
+    bounded = provider.get_historical_prices(
+        "FAKE",
+        start_date="2024-01-03",
+        end_date="2024-01-03",
+    )
+    assert len(bounded) == 1
+    assert bounded.index.min() == pd.Timestamp("2024-01-03")
+    assert bounded.index.max() == pd.Timestamp("2024-01-03")
+
+    unbounded = provider.get_historical_prices("FAKE")
+    assert len(unbounded) == 3
+    assert unbounded.index.min() == pd.Timestamp("2024-01-02")
+    assert unbounded.index.max() == pd.Timestamp("2024-01-04")
+    assert mock_get.call_count == 1
+
+
 @patch("etf_utils.data_provider.yf.download")
 def test_get_historical_prices_warns_on_non_lse_suffix(mock_download):
     """A ticker resolving to a non-.L listing should emit an FX-boundary warning."""
@@ -322,5 +354,4 @@ def test_heuristic_low_range_100_500(mock_download):
 
     # Should now be divided by 100
     assert result["close"].iloc[0] == pytest.approx(1.05, rel=0.01)
-
 

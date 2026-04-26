@@ -340,13 +340,15 @@ class DataProvider:
         df.index = pd.to_datetime(df.index)
         df = df.sort_index()
         df = df.rename(columns={"5. adjusted close": "close"})
-        result = df[["close"]]
-        result = self._normalize_pence_to_pounds(result, sym_av)
+        full_result = df[["close"]]
+        full_result = self._normalize_pence_to_pounds(full_result, sym_av)
+        self._price_cache[cache_key] = full_result
+
+        result = full_result
         if start_date:
             result = result[result.index >= pd.to_datetime(start_date)]
         if end_date:
             result = result[result.index <= pd.to_datetime(end_date)]
-        self._price_cache[cache_key] = result
         return result
 
     def _normalize_pence_to_pounds(self, result: pd.DataFrame, sym: str) -> pd.DataFrame:
