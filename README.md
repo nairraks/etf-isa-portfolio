@@ -79,6 +79,15 @@ uv run python -c "from etf_utils.data_provider import DataProvider; print('OK')"
 uv run python -c "from etf_utils.database import init_db; init_db(); print('DB OK')"
 ```
 
+## Site analytics
+
+Google Analytics 4 is enabled for the published Jupyter Book via `_config.yml`:
+
+- `html.analytics.google_analytics_id: G-0Z7Y15K61E`
+
+After changing analytics settings, rebuild locally with `uv run jupyter-book build .`
+and push to `main` to publish on GitHub Pages.
+
 ## Directory layout
 
 ```

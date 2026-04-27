@@ -32,6 +32,8 @@ html:
   use_repository_button: true
   use_issues_button: true
   use_edit_page_button: true
+  analytics:
+    google_analytics_id: G-0Z7Y15K61E
 
 parse:
   myst_enable_extensions:
