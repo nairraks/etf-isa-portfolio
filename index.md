@@ -13,11 +13,13 @@ in the [Glossary](content/99_glossary.md); every assumption is spelled out in
 [Methodology & Assumptions](content/00b_methodology.md).
 ```
 
-## Investment philosophy — constant-mix with annual rebalancing
+## Investment philosophy — constant-mix with fortnightly rebalancing
 
 This book follows a **constant-mix strategy**: set a long-term target weight
-per asset class, then **rebalance back to target** at the start of every UK
-tax year (6 April) when the fresh £20,000 ISA allowance becomes available.
+per asset class, then **rebalance back to target every 2 weeks**.
+
+The **portfolio universe and weighting framework are reviewed once per year in
+April** (aligned with the new UK tax year and ISA allowance reset).
 
 Why constant-mix?
 
@@ -29,10 +31,11 @@ Why constant-mix?
   lowly correlated*. Precious metals and broad commodities are in the 2026
   portfolio precisely for this reason: not because they out-return equities,
   but because they zig when equities zag.
-- **Cheap, tax-efficient and sleep-friendly.** One decision a year. Inside an
-  ISA, sales trigger no CGT; zero-fee brokers mean no trading costs. The
-  strategy is dominated by *what you don't do* — no market timing, no
-  fund-picking churn.
+- **Cheap, tax-efficient and sleep-friendly.** Rebalancing is systematic on a
+  fortnightly cadence, while strategic changes are consolidated into the
+  annual April review. Inside an ISA, sales trigger no CGT; zero-fee brokers
+  mean no trading costs. The strategy is dominated by *what you don't do* —
+  no market timing, no fund-picking churn.
 
 ```{admonition} Constant-mix vs drift
 :class: note
